@@ -78,9 +78,8 @@ solver.net
 # load pretrained weights
 solver.net.copy_from('oicr/data/imagenet_models/VGG16.v2.caffemodel')
 
-# running one iteration of forward, backward, optimization
+# runs one iteration of forward, backward, optimization; returns a float loss value
 # data layer must be provided or data keyword argument provided to step() call
-# returns a float loss value
 loss = solver.step(1)
 ```
 

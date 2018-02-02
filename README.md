@@ -81,3 +81,12 @@ loss = solver.step(1)
 # accesses the underlying net
 solver.net
 ```
+
+## Supported layers
+* convolution
+* inner product
+* max / avg pooling
+* relu
+* dropout
+* eltwise
+* softmax

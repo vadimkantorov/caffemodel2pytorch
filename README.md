@@ -11,6 +11,7 @@ model = caffemodel2pytorch.Net(
 model.cuda()
 model.eval()
 
+# make sure to have right procedure of image normalization and channel reordering
 image = torch.autograd.Variable(torch.Tensor(8, 3, 512, 512).cuda())
 
 # outputs dict of PyTorch Variables

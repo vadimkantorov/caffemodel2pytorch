@@ -2,7 +2,7 @@
 ```python
 import caffemodel2pytorch
 
-# https://gist.github.com/ksimonyan/211839e770f7b538e2d8#file-readme-md
+# prototxt and caffemodel from https://gist.github.com/ksimonyan/211839e770f7b538e2d8#file-readme-md
 model = caffemodel2pytorch.Net(
 	prototxt = 'VGG_ILSVRC_16_layers_deploy.prototxt',
 	weights = 'VGG_ILSVRC_16_layers.caffemodel',

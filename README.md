@@ -50,13 +50,16 @@ loss_weights = net.blob_loss_weights
 # setting a path to a custom proto, http paths accepted too
 caffe.caffe_proto = 'if_needed_path_to_custom_caffe.proto'
 
-# modules dictionary will be checked when reading the prototxt
+# modules dictionary will be checked when reading the prototxt (by layer type or by layer name, case invariant)
 # param is a dict representing the layer param, e.g. convolution_param for the Convolution module
 
-# register a nn.Module-derived layer:
+# register a nn.Module-derived layer
 caffe.modules['ROIPooling'] = lambda param: CustomRoiPoolingLayer(param['spatial_scale'])
 
-# register a function:
+# register a function
+caffe.modules['GlobalSumLayer'] = lambda param: lambda input: torch.sum(input)
+
+# register a data layer
 caffe.modules['data'] = lambda param: lambda *args: torch.cuda.FloatTensor(8, 3, 512, 512)
 
 # === BASIC OPTIMIZER ===

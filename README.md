@@ -82,7 +82,7 @@ solver.net.copy_from('oicr/data/imagenet_models/VGG16.v2.caffemodel')
 # data layer must be registered or inputs must be provided as keyword arguments
 loss = solver.step(1)
 ```
-**Note** To keep all caffemodel2pytorch initialization in one place, you may create a `caffe.py` file and put it next to the code you're porting. If done correctly, this file will be loaded instead of pycaffe. Example:
+**Note:** To keep all *caffemodel2pytorch* initialization in one place, you may create a `caffe.py` file and put it next to the code you're porting. If done correctly, this file will be loaded instead of *pycaffe*. Example:
 ```python
 # caffe.py
 

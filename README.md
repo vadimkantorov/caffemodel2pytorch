@@ -1,4 +1,4 @@
-## Execute Caffe models using PyTorch as backend
+## Run Caffe models using PyTorch as backend
 ```python
 import caffemodel2pytorch
 
@@ -38,13 +38,13 @@ net = caffe.Net('VGG_ILSVRC_16_layers_deploy.prototxt', caffe.TEST, weights = 'V
 # outputs a dict of NumPy arrays, data layer is sidestepped
 blobs_out = net.forward(data = np.zeros((8, 3, 512, 512), dtype = np.float32))
 
-# accesses the last layer
+# access the last layer
 layer = net.layers[-1]
 
 # converts and provides the output as NumPy array
 numpy_array = net.blobs['conv1_1'].data
 
-# accesse the loss weights
+# access the loss weights
 loss_weights = net.blob_loss_weights
 
 # === CONFIGURING ADDITIONAL LAYERS ===
@@ -73,7 +73,7 @@ caffe.modules['data'] = lambda param: lambda *args: torch.cuda.FloatTensor(8, 3,
 # it finds train.prototxt from the solver.prototxt's train_net or net parameters
 solver = caffe.SGDSolver('oicr/models/VGG16/solver.prototxt')
 
-# accesses the underlying net
+# access the underlying net
 solver.net
 
 # load pretrained weights

@@ -85,10 +85,10 @@ loss = solver.step(1)
 ```
 
 ## Supported layers
-* convolution (constant and gaussian weight fillers)
-* inner product
-* max / avg pooling
+* convolution (num_output, kernel_size, stride, pad, dilation; constant and gaussian weight/bias fillers)
+* inner_product (num_output; constant and gaussian weight/bias fillers)
+* max / avg pooling (kernel_size, stride, pad)
 * relu
-* dropout
-* eltwise
-* softmax
+* dropout (dropout_ratio)
+* eltwise (prod, sum, max)
+* softmax (axis)

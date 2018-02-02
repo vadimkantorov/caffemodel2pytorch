@@ -90,17 +90,6 @@ solver.net.copy_from('oicr/data/imagenet_models/VGG16.v2.caffemodel')
 # data layer must be registered or inputs must be provided as keyword arguments
 loss = solver.step(1)
 ```
-**Note:** To keep all *caffemodel2pytorch* initialization in one place, you may create a `caffe.py` file and put it next to the code you're porting. If done correctly, this file will be loaded instead of *pycaffe*. Example:
-```python
-# caffe.py
-
-# make sure to export everything
-from caffemodel2pytorch import *
-
-# custom initialization logic
-caffe_proto = 'if_needed_path_to_custom_caffe.proto'
-modules['ROIPooling'] = lambda param: CustomRoiPoolingLayer(param['spatial_scale'])
-```
 
 ## Supported layers
 * convolution (num_output, kernel_size, stride, pad, dilation; constant and gaussian weight/bias fillers)

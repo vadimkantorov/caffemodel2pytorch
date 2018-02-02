@@ -185,7 +185,7 @@ class InnerProduct(nn.Linear):
 		if self.weight is None and self.bias is None:
 			super(InnerProduct, self).__init__(x.size(1), self.out_features)
 			init_weight_bias(self)
-		return super(InnerProduct, self).forward(x.view(len(x), -1))
+		return super(InnerProduct, self).forward(x if x.size(-1) == self.in_features else x.view(len(x), -1))
 
 	def set_parameters(self, weight = None, bias = None):
 		if weight is not None:

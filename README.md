@@ -57,7 +57,8 @@ caffe.modules['data'] = lambda param: lambda *args: torch.cuda.FloatTensor(8, 3,
 
 # create an SGD solver, loads the net in train mode
 # it knows about base_lr, weight_decay, momentum, lr_mult, decay_mult, iter_size, lr policy step, step_size, gamma
-solver = caffe.SGDSolver(solver_prototxt = '../oicr/models/VGG16/solver.prototxt', weights = '../oicr/data/imagenet_models/VGG16.v2.caffemodel', train_prototxt = '../oicr/models/VGG16/train.prototxt')
+# this example uses paths from https://github.com/ppengtang/oicr
+solver = caffe.SGDSolver(solver_prototxt = 'oicr/models/VGG16/solver.prototxt', weights = 'oicr/data/imagenet_models/VGG16.v2.caffemodel', train_prototxt = 'oicr/models/VGG16/train.prototxt')
 
 # running one iteration of forward, backward, optimization
 # data layer must be provided or data keyword argument provided to step() call

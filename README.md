@@ -90,7 +90,7 @@ loss = solver.step(1)
 from caffemodel2pytorch import *
 
 # custom initialization logic
-modules['ROIPooling'] = ['ROIPooling'] = lambda param: CustomRoiPoolingLayer(param['spatial_scale'])
+modules['ROIPooling'] = lambda param: CustomRoiPoolingLayer(param['spatial_scale'])
 ```
 
 ## Supported layers

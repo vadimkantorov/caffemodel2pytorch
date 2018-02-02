@@ -36,7 +36,7 @@ net = caffe.Net('VGG_ILSVRC_16_layers_deploy.prototxt', caffe.TEST, weights = 'V
 # outputs a dict of NumPy arrays, data layer is sidestepped
 blobs_out = net.forward(data = np.zeros((8, 3, 512, 512), dtype = np.float32))
 
-# accesses the first layer
+# accesses the last layer
 layer = net.layers[-1]
 
 # converts and provides the output as NumPy array

@@ -30,7 +30,7 @@ import caffemodel2pytorch as caffe
 caffe.set_mode_gpu()
 caffe.set_device(0)
 
-# === loading and using the converted model in evaluation mode ===
+# === LOADING AND USING THE NET IN EVAL MODE ===
 net = caffe.Net('VGG_ILSVRC_16_layers_deploy.prototxt', caffe.TEST, weights = 'VGG_ILSVRC_16_layers.caffemodel')
 
 # outputs a dict of NumPy arrays, data layer is sidestepped
@@ -45,7 +45,7 @@ numpy_array = net.blobs['conv1_1'].data
 # accesse the loss weights
 loss_weights = net.blob_loss_weights
 
-# === configuring caffemodel2pytorch to learn about additional layers ===
+# === CONFIGURING ADDITIONAL LAYERS ===
 
 # setting a path to a custom proto, http paths accepted too
 caffe.caffe_proto = 'if_needed_path_to_custom_caffe.proto'
@@ -59,7 +59,7 @@ caffe.modules['ROIPooling'] = lambda param: CustomRoiPoolingLayer(param['spatial
 # register a function:
 caffe.modules['data'] = lambda param: lambda *args: torch.cuda.FloatTensor(8, 3, 512, 512)
 
-# === basic optimizer ===
+# === BASIC OPTIMIZER ===
 
 # create an SGD solver, loads the net in train mode
 # it knows about base_lr, weight_decay, momentum, lr_mult, decay_mult, iter_size, lr policy step, step_size, gamma

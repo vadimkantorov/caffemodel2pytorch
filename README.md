@@ -1,4 +1,4 @@
-## Executing Caffe models using PyTorch as backend
+## Execute Caffe models using PyTorch as backend
 ```python
 import caffemodel2pytorch
 
@@ -22,7 +22,7 @@ output_dict = model(image)
 
 ```
 
-## Imitating pycaffe interface to help in porting
+## Imitate pycaffe interface to help in porting
 
 ```python
 import numpy as np

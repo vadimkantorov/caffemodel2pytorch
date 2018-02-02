@@ -80,7 +80,7 @@ solver.net
 solver.net.copy_from('oicr/data/imagenet_models/VGG16.v2.caffemodel')
 
 # runs one iteration of forward, backward, optimization; returns a float loss value
-# data layer must be provided or data keyword argument provided to step() call
+# data layer must be registered or inputs must be provided as keyword arguments
 loss = solver.step(1)
 ```
 

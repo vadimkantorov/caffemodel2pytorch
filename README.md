@@ -65,10 +65,11 @@ caffe.modules['data'] = lambda param: lambda *args: torch.cuda.FloatTensor(8, 3,
 
 # === BASIC OPTIMIZER ===
 
+# this example uses paths from https://github.com/ppengtang/oicr
+
 # create an SGD solver, loads the net in train mode
 # it knows about base_lr, weight_decay, momentum, lr_mult, decay_mult, iter_size, lr policy step, step_size, gamma
 # it finds train.prototxt from the solver.prototxt's train_net or net parameters
-# this example uses paths from https://github.com/ppengtang/oicr
 solver = caffe.SGDSolver('oicr/models/VGG16/solver.prototxt')
 
 # accesses the underlying net

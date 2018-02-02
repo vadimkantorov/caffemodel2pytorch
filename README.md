@@ -32,6 +32,7 @@ caffe.set_mode_gpu()
 caffe.set_device(0)
 
 # === LOADING AND USING THE NET IN EVAL MODE ===
+
 net = caffe.Net('VGG_ILSVRC_16_layers_deploy.prototxt', caffe.TEST, weights = 'VGG_ILSVRC_16_layers.caffemodel')
 
 # outputs a dict of NumPy arrays, data layer is sidestepped

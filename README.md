@@ -26,10 +26,10 @@ import caffemodel2pytorch as caffe
 caffe.set_mode_gpu()
 caffe.set_device(0)
 
-# === loading and using the converted model in evaluation mode
+# === loading and using the converted model in evaluation mode ===
 net = caffe.Net('VGG_ILSVRC_16_layers_deploy.prototxt', caffe.TEST, weights = 'VGG_ILSVRC_16_layers.caffemodel')
 
-# outputs a dict of NumPy arrays
+# outputs a dict of NumPy arrays, data layer is sidestepped
 blobs_out = net.forward(data = np.zeros((8, 3, 512, 512), dtype = np.float32))
 
 # accesses the first layer
@@ -53,10 +53,17 @@ caffe.caffe_proto = 'if_needed_path_to_custom_caffe.proto'
 caffe.modules['ROIPooling'] = lambda param: CustomRoiPoolingLayer(param['spatial_scale'])
 
 # register a function:
-caffe.modules['GlobalSumPooling'] = lambda param: lambda input: torch.sum(input)
+caffe.modules['data'] = lambda param: lambda *args: torch.cuda.FloatTensor(8, 3, 512, 512)
 
-# 
-solver = caffe.SGDSolver('../oicr/models/VGG16/solver.prototxt', weights = '../oicr/data/imagenet_models/VGG16.v2.caffemodel', train_prototxt = '../oicr/models/VGG16/train.prototxt')
-solver.step(1)
+# create an SGD solver, loads the net in train mode
+# it knows about base_lr, weight_decay, momentum, lr_mult, decay_mult, iter_size, lr policy step, step_size, gamma
+solver = caffe.SGDSolver(solver_prototxt = '../oicr/models/VGG16/solver.prototxt', weights = '../oicr/data/imagenet_models/VGG16.v2.caffemodel', train_prototxt = '../oicr/models/VGG16/train.prototxt')
 
+# running one iteration of forward, backward, optimization
+# data layer must be provided or data keyword argument provided to step() call
+# returns a float loss value
+loss = solver.step(1)
+
+# accesses the underlying net
+solver.net
 ```

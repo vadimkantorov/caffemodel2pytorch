@@ -83,7 +83,7 @@ solver.net
 ```
 
 ## Supported layers
-* convolution
+* convolution (constant and gaussian weight fillers)
 * inner product
 * max / avg pooling
 * relu

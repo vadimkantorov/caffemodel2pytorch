@@ -55,6 +55,8 @@ caffe.modules['ROIPooling'] = lambda param: CustomRoiPoolingLayer(param['spatial
 # register a function:
 caffe.modules['data'] = lambda param: lambda *args: torch.cuda.FloatTensor(8, 3, 512, 512)
 
+# === basic optimizer ===
+
 # create an SGD solver, loads the net in train mode
 # it knows about base_lr, weight_decay, momentum, lr_mult, decay_mult, iter_size, lr policy step, step_size, gamma
 # this example uses paths from https://github.com/ppengtang/oicr

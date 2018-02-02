@@ -12,7 +12,7 @@ model.cuda()
 model.eval()
 
 # make sure to have right procedure of image normalization and channel reordering
-image = torch.autograd.Variable(torch.Tensor(8, 3, 512, 512).cuda())
+image = torch.autograd.Variable(torch.FloatTensor(8, 3, 512, 512).cuda())
 
 # outputs dict of PyTorch Variables
 output_dict = model(data = image)

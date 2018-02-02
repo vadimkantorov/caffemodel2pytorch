@@ -1,5 +1,6 @@
 ## Run Caffe models using PyTorch as backend
 ```python
+import torch
 import caffemodel2pytorch
 
 # prototxt and caffemodel from https://gist.github.com/ksimonyan/211839e770f7b538e2d8#file-readme-md
@@ -10,15 +11,22 @@ model = caffemodel2pytorch.Net(
 )
 model.cuda()
 model.eval()
+torch.set_grad_enabled(False)
 
 # make sure to have right procedure of image normalization and channel reordering
-images = torch.autograd.Variable(torch.FloatTensor(8, 3, 512, 512).cuda())
+image = torch.autograd.Variable(torch.Tensor(8, 3, 224, 224).cuda())
 
 # outputs dict of PyTorch Variables
-output_dict = model(data = images)
+# in this example the dict contains the only key "prob"
+#output_dict = model(data = image)
+
+# you can remove unneeded layers:
+del model.prob
+del model.fc8
 
 # a single input variable is interpreted as an input blob named "data"
-output_dict = model(images)
+# in this example the dict contains the only key "fc7"
+output_dict = model(image)
 ```
 
 ## Imitate pycaffe interface to help in porting
@@ -35,7 +43,7 @@ caffe.set_device(0)
 net = caffe.Net('VGG_ILSVRC_16_layers_deploy.prototxt', caffe.TEST, weights = 'VGG_ILSVRC_16_layers.caffemodel')
 
 # outputs a dict of NumPy arrays, data layer is sidestepped
-blobs_out = net.forward(data = np.zeros((8, 3, 512, 512), dtype = np.float32))
+blobs_out = net.forward(data = np.zeros((8, 3, 224, 224), dtype = np.float32))
 
 # access the last layer
 layer = net.layers[-1]

@@ -12,14 +12,13 @@ model.cuda()
 model.eval()
 
 # make sure to have right procedure of image normalization and channel reordering
-image = torch.autograd.Variable(torch.FloatTensor(8, 3, 512, 512).cuda())
+images = torch.autograd.Variable(torch.FloatTensor(8, 3, 512, 512).cuda())
 
 # outputs dict of PyTorch Variables
-output_dict = model(data = image)
+output_dict = model(data = images)
 
 # a single input variable is interpreted as an input blob named "data"
-output_dict = model(image) 
-
+output_dict = model(images)
 ```
 
 ## Imitate pycaffe interface to help in porting

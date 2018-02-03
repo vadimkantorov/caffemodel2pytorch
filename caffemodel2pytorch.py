@@ -60,7 +60,7 @@ class Net(nn.Module):
 				getattr(self, layer.name).caffe_input_variable_names = list(layer.bottom)
 				getattr(self, layer.name).caffe_output_variable_names = list(layer.top)
 				getattr(self, layer.name).caffe_loss_weight = (list(layer.loss_weight) or [1.0 if layer_type.upper().endswith('LOSS') else 0.0]) * len(layer.top)
-				getattr(self, layer.name).caffe_optimiziation_params = to_dict(layer.param)
+				getattr(self, layer.name).caffe_optimization_params = to_dict(layer.param)
 			else:
 				print('Skipping layer [{}, {}, {}]: not found in caffemodel2pytorch.modules dict'.format(layer.name, layer_type, layer.type))
 
@@ -83,7 +83,6 @@ class Net(nn.Module):
 			for name in module.caffe_input_variable_names:
 				assert name in variables, 'Variable [{}] does not exist. Pass it as a keyword argument or provide a layer which produces it.'.format(name)
 			inputs = list(map(variables.get, module.caffe_input_variable_names))
-			print(module.caffe_layer_type)
 			outputs = module(*inputs)
 			if not isinstance(outputs, tuple):
 				outputs = (outputs, )
@@ -158,8 +157,8 @@ class SGDSolver(object):
 		self.optimizer, self.scheduler = None, None
 
 	def init_optimizer_scheduler(self):
-		self.optimizer = torch.optim.SGD([dict(params = [param], lr = self.optimizer_params['lr'] * mult.get('lr_mult', 1), weight_decay = self.optimizer_params['weight_decay'] * mult.get('decay_mult', 1), momentum = self.optimizer_params['momentum']) for module in self.net.modules() for param, mult in zip(module.parameters(), module.caffe_optimization_params + [{}, {}])])
-		self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size = self.lr_scheduler_params['step_size'], gamma = self.lr_scheduler_params['gamma']) if solver_param.get('policy') == 'step' else type('', (object, ), dict(step = lambda self: None))()
+		self.optimizer = torch.optim.SGD([dict(params = [param], lr = self.optimizer_params['lr'] * mult.get('lr_mult', 1), weight_decay = self.optimizer_params['weight_decay'] * mult.get('decay_mult', 1), momentum = self.optimizer_params['momentum']) for module in self.net.children() for param, mult in zip(module.parameters(), module.caffe_optimization_params + [{}, {}])])
+		self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size = self.lr_scheduler_params['step_size'], gamma = self.lr_scheduler_params['gamma']) if self.lr_scheduler_params.get('policy') == 'step' else type('', (object, ), dict(step = lambda self: None))()
 
 	def step(self, iterations = 1, **inputs):
 		loss_total = 0.0
@@ -169,7 +168,7 @@ class SGDSolver(object):
 
 			for j in range(self.iter_size):
 				outputs = self.net(**inputs)
-				loss = sum([self.net.blob_loss_weights[k] * v.sum() for k, v in outputs.items()])
+				loss = sum([self.net.blob_loss_weights[k] * v.sum() for k, v in outputs.items() if self.net.blob_loss_weights[k] != 0])
 				loss_total += float(loss)
 				if self.optimizer is None:
 					self.init_optimizer_scheduler()

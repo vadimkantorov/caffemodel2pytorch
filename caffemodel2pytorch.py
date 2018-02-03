@@ -4,11 +4,16 @@ import time
 import subprocess
 import tempfile
 import collections
-import google.protobuf.text_format
-from google.protobuf.descriptor import FieldDescriptor as FD
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+import google.protobuf.text_format
+import google.protobuf.descriptor
+import google.protobuf.descriptor_pool
+import google.protobuf.symbol_database
+from google.protobuf.descriptor import FieldDescriptor as FD
+
 try:
 	from urllib2 import urlopen
 except:
@@ -294,7 +299,13 @@ def caffe_pb2_singleton(caffe_proto, codegen_dir):
 			f.write((urlopen if 'http' in caffe_proto else open)(caffe_proto).read())
 		subprocess.check_call(['protoc', '--proto_path', os.path.dirname(local_caffe_proto), '--python_out', codegen_dir, local_caffe_proto])
 		sys.path.insert(0, codegen_dir)
+		old_pool = google.protobuf.descriptor._message.default_pool
+		old_symdb = google.protobuf.symbol_database._DEFAULT
+		google.protobuf.descriptor._message.default_pool = google.protobuf.descriptor_pool.DescriptorPool()
+		google.protobuf.symbol_database._DEFAULT = google.protobuf.symbol_database.SymbolDatabase(pool = google.protobuf.descriptor._message.default_pool)
 		import caffe_pb2
+		google.protobuf.descriptor._message.default_pool = old_pool
+		google.protobuf.symbol_database._DEFAULT = old_symdb
 	return sys.modules['caffe_pb2']
 
 def convert_to_gpu_if_enabled(obj):

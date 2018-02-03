@@ -1,3 +1,15 @@
+## Description
+This converter supports the following Caffe layers:
+* convolution (num_output, kernel_size, stride, pad, dilation; constant and gaussian weight/bias fillers)
+* inner_product (num_output; constant and gaussian weight/bias fillers)
+* max / avg pooling (kernel_size, stride, pad)
+* relu
+* dropout (dropout_ratio)
+* eltwise (prod, sum, max)
+* softmax (axis)
+
+PRs to enable other layers or layer params are very welcome!
+
 ## Run Caffe models using PyTorch as backend
 ```python
 import torch
@@ -90,12 +102,3 @@ solver.net.copy_from('oicr/data/imagenet_models/VGG16.v2.caffemodel')
 # data layer must be registered or inputs must be provided as keyword arguments
 loss = solver.step(1)
 ```
-
-## Supported layers
-* convolution (num_output, kernel_size, stride, pad, dilation; constant and gaussian weight/bias fillers)
-* inner_product (num_output; constant and gaussian weight/bias fillers)
-* max / avg pooling (kernel_size, stride, pad)
-* relu
-* dropout (dropout_ratio)
-* eltwise (prod, sum, max)
-* softmax (axis)

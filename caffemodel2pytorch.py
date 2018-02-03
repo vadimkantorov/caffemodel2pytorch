@@ -16,9 +16,9 @@ except:
 
 caffe_proto = 'https://raw.githubusercontent.com/BVLC/caffe/master/src/caffe/proto/caffe.proto'
 
-TRAIN = 'train'
+TRAIN = 0
 
-TEST = 'test'
+TEST = 1
 
 def set_mode_gpu():
 	global convert_to_gpu_if_enabled
@@ -39,6 +39,14 @@ class Net(nn.Module):
 
 		self.net_param = caffe_pb2_singleton(caffe_proto_, codegen_dir).NetParameter()
 		google.protobuf.text_format.Parse(open(prototxt).read(), self.net_param)
+
+		def wrap_function(layer_name, forward):
+			return type('caffe_' + str(layer_name), (nn.Module, ), dict(forward = lambda self, *inputs: forward(*inputs)))()
+
+		def wrap_caffe_python_layer(layer_name, caffe_python_layer, param_str):
+			caffe_python_layer.param_str = param_str
+			return type('caffe_' + str(layer_name), (nn.Module, ), dict(forward = lambda self, *inputs: CaffePythonLayerFunction(caffe_python_layer)(*inputs), __getattr__ = lambda self, name: nn.Module.__getattr__(self, name) if name in dir(self) else getattr(caffe_python_layer, name)))()
+
 		for layer in list(self.net_param.layer) + list(self.net_param.layers):
 			layer_type = layer.type if layer.type != 'Python' else layer.python_param.layer
 			if isinstance(layer_type, int):
@@ -47,7 +55,7 @@ class Net(nn.Module):
 			if module_constructor is not None:
 				param = to_dict(([v for f, v in layer.ListFields() if f.name.endswith('_param')] + [None])[0])
 				module = module_constructor(param)
-				self.add_module(layer.name, module if isinstance(module, nn.Module) else type('caffe_' + str(layer.name), (nn.Module, ), dict(forward = (lambda captured = module : lambda self, *inputs: captured(*inputs))()))())
+				self.add_module(layer.name, module if isinstance(module, nn.Module) else wrap_caffe_python_layer(layer.name, module, param.get('param_str', '')) if type(module).__name__.endswith('Layer') else wrap_function(layer.name, module))
 				getattr(self, layer.name).caffe_layer_type = layer_type
 				getattr(self, layer.name).caffe_input_variable_names = list(layer.bottom)
 				getattr(self, layer.name).caffe_output_variable_names = list(layer.top)
@@ -59,25 +67,29 @@ class Net(nn.Module):
 		if weights is not None:
 			self.copy_from(weights)
 
-		self.blobs = collections.defaultdict(Net.BlobWrapper)
+		self.blobs = collections.defaultdict(BlobWrapper)
 		self.blob_loss_weights = {name : loss_weight for module in self.children() for name, loss_weight in zip(module.caffe_output_variable_names, module.caffe_loss_weight)}
 
 		self.train(phase != TEST)
 		convert_to_gpu_if_enabled(self)
 
 	def forward(self, data = None, **variables):
-		variables['data'] = data
+		if data is not None:
+			variables['data'] = data
 		numpy = not all([isinstance(v, torch.autograd.Variable) for v in variables.values()])
 		variables = {k : convert_to_gpu_if_enabled(torch.autograd.Variable(torch.from_numpy(v.copy())) if numpy else v) for k, v in variables.items()}
 
 		for module in [module for module in self.children() if not all([name in variables for name in module.caffe_output_variable_names])]:
+			for name in module.caffe_input_variable_names:
+				assert name in variables, 'Variable [{}] does not exist. Pass it as a keyword argument or provide a layer which produces it.'.format(name)
 			inputs = list(map(variables.get, module.caffe_input_variable_names))
+			print(module.caffe_layer_type)
 			outputs = module(*inputs)
 			if not isinstance(outputs, tuple):
 				outputs = (outputs, )
 			variables.update(dict(zip(module.caffe_output_variable_names, outputs)))
 
-		self.blobs.update({k : Net.BlobWrapper(data = v, numpy = numpy) for k, v in variables.items()})
+		self.blobs.update({k : BlobWrapper(data = v, numpy = numpy) for k, v in variables.items()})
 		caffe_output_variable_names = set([name for module in self.children() for name in module.caffe_output_variable_names]) - set([name for module in self.children() for name in module.caffe_input_variable_names if name not in module.caffe_output_variable_names])
 		return {k : v.detach().cpu().numpy() if numpy else v for k, v in variables.items() if k in caffe_output_variable_names}
 
@@ -95,19 +107,42 @@ class Net(nn.Module):
 	def layers(self):
 		return list(self.children())
 
-	class BlobWrapper(object):
-		def __init__(self, data = None, numpy = False):
-			self.data_ = data
-			self.numpy = numpy
+class BlobWrapper(object):
+	NumPyAssignmentAdapter = type('', (object, ), dict(__setitem__ = lambda self, indices, values: setattr(self, 'contents', values)))
 
-		@property
-		def data(self):
-			if self.numpy and isinstance(self.data_, torch.autograd.Variable):
-				self.data_ = self.data_.detach().cpu().numpy()
-			return self.data_
+	def __init__(self, data = None, numpy = False):
+		self.data_ = data if data is not None else BlobWrapper.NumPyAssignmentAdapter()
+		self.numpy = numpy
 
-		def reshape(self, *args, **kwargs):
-			pass
+	@property
+	def data(self):
+		if self.numpy and isinstance(self.data_, torch.autograd.Variable):
+			self.data_ = self.data_.detach().cpu().numpy()
+		return self.data_
+
+	def reshape(self, *args, **kwargs):
+		self.shape = args
+
+class Layer(object):
+	pass
+
+class CaffePythonLayerFunction(torch.autograd.Function):
+	def __init__(self, caffe_python_layer):
+		self.caffe_python_layer = caffe_python_layer
+
+	def forward(self, *inputs):
+		blobs_in = [BlobWrapper(v.numpy()) for v in inputs]
+		blobs_out = collections.defaultdict(BlobWrapper)
+
+		self.caffe_python_layer.setup(blobs_in, blobs_out)
+		self.caffe_python_layer.setup = lambda *args: None
+
+		self.caffe_python_layer.forward(blobs_in, blobs_out)
+		outputs = tuple(convert_to_gpu_if_enabled(torch.from_numpy(v.data.contents.reshape(*v.shape))) for k, v in sorted(blobs_out.items()))
+		return outputs
+
+	def backward(self, grad_output):
+		pass
 			
 class SGDSolver(object):
 	def __init__(self, solver_prototxt):
@@ -157,7 +192,8 @@ modules = dict(
 
 class Convolution(nn.Conv2d):
 	def __init__(self, param):
-		super(Convolution, self).__init__(1, param['num_output'], kernel_size = param['kernel_size'], stride = param.get('stride', 1), padding = param.get('pad', 0), dilation = param.get('dilation', 1))
+		super(Convolution, self).__init__(1, param['num_output'], kernel_size = param['kernel_size'][0], stride = param.get('stride', [1])[0], padding = param.get('pad', [0])[0], dilation = param.get('dilation', 1))
+		import IPython; IPython.embed()
 		self.weight, self.bias = None, None
 		self.weight_init, self.bias_init = param.get('weight_filler', {}), param.get('bias_filler', {})
 
@@ -198,9 +234,9 @@ class InnerProduct(nn.Linear):
 def init_weight_bias(self):
 	for name in ['weight', 'bias']:
 		tensor, init = getattr(self, name), getattr(self, name + '_init')
-		if init['type'] == 'gaussian':
+		if init.get('type') == 'gaussian':
 			nn.init.normal(tensor, std = init['std'])
-		elif init['type'] == 'constant':
+		elif init.get('type') == 'constant':
 			nn.init.constant(tensor, val = init['value'])
 
 codegen_dir = tempfile.mkdtemp()

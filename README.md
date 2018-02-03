@@ -1,5 +1,10 @@
 ## Description
-This converter supports the following Caffe layers:
+This converter can be useful for porting Caffe code and layers to PyTorch. Features:
+* load Caffe models and use them from PyTorch
+* mock PyCaffe API to allow for smooth porting of Caffe-using code
+* wrapping Caffe's Python layers
+
+Of course it is very incomplete. Currently it supports the following Caffe layers:
 * convolution (num_output, kernel_size, stride, pad, dilation; constant and gaussian weight/bias fillers)
 * inner_product (num_output; constant and gaussian weight/bias fillers)
 * max / avg pooling (kernel_size, stride, pad)
@@ -7,6 +12,8 @@ This converter supports the following Caffe layers:
 * dropout (dropout_ratio)
 * eltwise (prod, sum, max)
 * softmax (axis)
+
+Adding many other layers and loss functions is trivial, as you can see from the definition of the `modules` dictionary in the code.
 
 PRs to enable other layers or layer params are very welcome!
 

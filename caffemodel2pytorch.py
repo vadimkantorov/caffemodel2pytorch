@@ -43,9 +43,9 @@ class Net(nn.Module):
 		def wrap_function(layer_name, forward):
 			return type('caffe_' + str(layer_name), (nn.Module, ), dict(forward = lambda self, *inputs: forward(*inputs)))()
 
-		def wrap_caffe_python_layer(layer_name, caffe_python_layer, param_str, caffe_output_variable_names):
+		def wrap_caffe_python_layer(layer_name, caffe_python_layer, caffe_input_variable_names, caffe_output_variable_names, param_str):
 			caffe_python_layer.param_str = param_str
-			return type('caffe_' + str(layer_name), (nn.Module, ), dict(forward = lambda self, *inputs: CaffePythonLayerFunction(caffe_python_layer, caffe_output_variable_names)(*inputs), __getattr__ = lambda self, name: nn.Module.__getattr__(self, name) if name in dir(self) else getattr(caffe_python_layer, name)))()
+			return type('caffe_' + str(layer_name), (nn.Module, ), dict(forward = lambda self, *inputs: Layer(caffe_python_layer, caffe_input_variable_names, caffe_output_variable_names)(*inputs), __getattr__ = lambda self, name: nn.Module.__getattr__(self, name) if name in dir(self) else getattr(caffe_python_layer, name)))()
 
 		for layer in list(self.net_param.layer) + list(self.net_param.layers):
 			layer_type = layer.type if layer.type != 'Python' else layer.python_param.layer
@@ -54,20 +54,28 @@ class Net(nn.Module):
 			module_constructor = ([v for k, v in modules.items() if k.replace('_', '').upper() in [layer_type.replace('_', '').upper(), layer.name.replace('_', '').upper()]] + [None])[0]
 			if module_constructor is not None:
 				param = to_dict(([v for f, v in layer.ListFields() if f.name.endswith('_param')] + [None])[0])
+				caffe_input_variable_names = list(layer.bottom)
+				caffe_output_variable_names = list(layer.top)
+				caffe_loss_weight = (list(layer.loss_weight) or [1.0 if layer_type.upper().endswith('LOSS') else 0.0]) * len(layer.top)
+				caffe_propagate_down = list(layer.propagate_down) or [1] * len(caffe_input_variable_names)
+				caffe_optimization_params = to_dict(layer.param)
+
 				module = module_constructor(param)
-				self.add_module(layer.name, module if isinstance(module, nn.Module) else wrap_caffe_python_layer(layer.name, module, param.get('param_str', ''), list(layer.top)) if type(module).__name__.endswith('Layer') else wrap_function(layer.name, module))
-				getattr(self, layer.name).caffe_layer_type = layer_type
-				getattr(self, layer.name).caffe_input_variable_names = list(layer.bottom)
-				getattr(self, layer.name).caffe_output_variable_names = list(layer.top)
-				getattr(self, layer.name).caffe_loss_weight = (list(layer.loss_weight) or [1.0 if layer_type.upper().endswith('LOSS') else 0.0]) * len(layer.top)
-				getattr(self, layer.name).caffe_optimization_params = to_dict(layer.param)
+				self.add_module(layer.name, module if isinstance(module, nn.Module) else wrap_caffe_python_layer(layer.name, module, caffe_input_variable_names, caffe_output_variable_names, param.get('param_str', '')) if type(module).__name__.endswith('Layer') else wrap_function(layer.name, module))
+				module = getattr(self, layer.name)
+				module.caffe_layer_type = layer_type
+				module.caffe_input_variable_names = caffe_input_variable_names
+				module.caffe_output_variable_names = caffe_output_variable_names
+				module.caffe_loss_weight = caffe_loss_weight
+				module.caffe_propagate_down = caffe_propagate_down
+				module.caffe_optimization_params = caffe_optimization_params
 			else:
 				print('Skipping layer [{}, {}, {}]: not found in caffemodel2pytorch.modules dict'.format(layer.name, layer_type, layer.type))
 
 		if weights is not None:
 			self.copy_from(weights)
 
-		self.blobs = collections.defaultdict(BlobWrapper)
+		self.blobs = collections.defaultdict(Blob)
 		self.blob_loss_weights = {name : loss_weight for module in self.children() for name, loss_weight in zip(module.caffe_output_variable_names, module.caffe_loss_weight)}
 
 		self.train(phase != TEST)
@@ -82,13 +90,14 @@ class Net(nn.Module):
 		for module in [module for module in self.children() if not all([name in variables for name in module.caffe_output_variable_names])]:
 			for name in module.caffe_input_variable_names:
 				assert name in variables, 'Variable [{}] does not exist. Pass it as a keyword argument or provide a layer which produces it.'.format(name)
-			inputs = list(map(variables.get, module.caffe_input_variable_names))
+			inputs = [variables[name] if propagate_down != 0 else variables[name].detach() for name, propagate_down in zip(module.caffe_input_variable_names, module.caffe_propagate_down)]
 			outputs = module(*inputs)
+
 			if not isinstance(outputs, tuple):
 				outputs = (outputs, )
 			variables.update(dict(zip(module.caffe_output_variable_names, outputs)))
 
-		self.blobs.update({k : BlobWrapper(data = v, numpy = numpy) for k, v in variables.items()})
+		self.blobs.update({k : Blob(data = v, numpy = numpy) for k, v in variables.items()})
 		caffe_output_variable_names = set([name for module in self.children() for name in module.caffe_output_variable_names]) - set([name for module in self.children() for name in module.caffe_input_variable_names if name not in module.caffe_output_variable_names])
 		return {k : v.detach().cpu().numpy() if numpy else v for k, v in variables.items() if k in caffe_output_variable_names}
 
@@ -106,12 +115,14 @@ class Net(nn.Module):
 	def layers(self):
 		return list(self.children())
 
-class BlobWrapper(object):
-	AssignmentAdapter = type('', (object, ), dict(__setitem__ = lambda self, indices, values: setattr(self, 'contents', values)))
+class Blob(object):
+	AssignmentAdapter = type('', (object, ), dict(shape = property(lambda self: self.contents.shape), __setitem__ = lambda self, indices, values: setattr(self, 'contents', values)))
 
-	def __init__(self, data = None, numpy = False):
-		self.data_ = data if data is not None else BlobWrapper.AssignmentAdapter()
+	def __init__(self, data = None, diff = None, numpy = False):
+		self.data_ = data if data is not None else Blob.AssignmentAdapter()
+		self.diff_ = diff if diff is not None else Blob.AssignmentAdapter()
 		self.numpy = numpy
+		self.shape_ = None
 
 	@property
 	def data(self):
@@ -119,30 +130,64 @@ class BlobWrapper(object):
 			self.data_ = self.data_.detach().cpu().numpy()
 		return self.data_
 
-	def reshape(self, *args, **kwargs):
-		self.shape = args
+	@property
+	def diff(self):
+		if self.numpy and isinstance(self.diff_, torch.autograd.Variable):
+			self.diff_ = self.diff_.detach().cpu().numpy()
+		return self.diff_
 
-class Layer(object):
-	pass
+	def reshape(self, *args):
+		self.shape_ = args
 
-class CaffePythonLayerFunction(torch.autograd.Function):
-	def __init__(self, caffe_python_layer, caffe_output_variable_names):
+	def count(self, *axis):
+		return reduce(lambda x, y: x * y, self.shape_[slice(*(axis + [-1])[:2])])
+
+	@property
+	def shape(self):
+		return self.shape_ if self.shape_ is not None else self.data_.shape
+
+	@property
+	def num(self):
+		return self.shape[0]
+
+	@property
+	def channels(self):
+		return self.shape[1]
+
+	@property
+	def height(self):
+		return self.shape[2]
+
+	@property
+	def width(self):
+		return self.shape[3]
+
+class Layer(torch.autograd.Function):
+	def __init__(self, caffe_python_layer = None, caffe_input_variable_names = None, caffe_output_variable_names = None, caffe_propagate_down = None):
 		self.caffe_python_layer = caffe_python_layer
+		self.caffe_input_variable_names = caffe_input_variable_names
 		self.caffe_output_variable_names = caffe_output_variable_names
+		self.caffe_propagate_down = caffe_propagate_down
 
 	def forward(self, *inputs):
-		blobs_in = [BlobWrapper(v.cpu().numpy()) for v in inputs]
-		blobs_out = [BlobWrapper() for i in self.caffe_output_variable_names]
+		bottom = [Blob(data = v.cpu().numpy()) for v in inputs]
+		top = [Blob() for name in self.caffe_output_variable_names]
 
-		self.caffe_python_layer.setup(blobs_in, blobs_out)
+		#self.caffe_python_layer.reshape()
+		self.caffe_python_layer.setup(bottom, top)
 		self.caffe_python_layer.setup = lambda *args: None
 
-		self.caffe_python_layer.forward(blobs_in, blobs_out)
-		outputs = tuple(convert_to_gpu_if_enabled(torch.from_numpy(v.data.contents.reshape(*v.shape))) for v in blobs_out)
+		self.caffe_python_layer.forward(bottom, top)
+		outputs = tuple(convert_to_gpu_if_enabled(torch.from_numpy(v.data.contents.reshape(*v.shape))) for v in top)
+		self.save_for_backward(*(inputs + outputs))
 		return outputs
 
-	def backward(self, grad_output):
-		pass
+	def backward(self, grad_outputs):
+		inputs, outputs = self.saved_tensors[:len(self.caffe_input_variable_names)], self.saved_tensors[len(self.caffe_input_variable_names):]
+		bottom = [Blob(data = v.cpu().numpy()) for v in inputs]
+		top = [Blob(data = output.cpu().numpy(), diff = grad_output.cpu().numpy()) for grad_output, output in zip(grad_outputs, outputs)]
+		self.caffe_python_layer.backward(top, self.caffe_propagate_down, bottom)
+		return tuple(convert_to_gpu_if_enabled(torch.from_numpy(blob.diff.contents.reshape(*v.reshape))) if propagate_down != 0 else None for v, propagate_down in zip(bottom, self.caffe_propagate_down))
 			
 class SGDSolver(object):
 	def __init__(self, solver_prototxt):

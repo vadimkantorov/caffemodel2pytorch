@@ -99,7 +99,7 @@ class Net(nn.Module):
 			module = getattr(self, layer.name, None)
 			if module is None:
 				continue
-			parameters = {name : torch.Tensor(blob.data).view(list(blob.shape.dim) if len(blob.shape.dim) > 0 else [blob.num, blob.channels, blob.height, blob.width]) for name, blob in zip(['weight', 'bias'], layer.blobs)}
+			parameters = {name : convert_to_gpu_if_enabled(torch.FloatTensor(blob.data)).view(list(blob.shape.dim) if len(blob.shape.dim) > 0 else [blob.num, blob.channels, blob.height, blob.width]) for name, blob in zip(['weight', 'bias'], layer.blobs)}
 			if len(parameters) > 0:
 				module.set_parameters(**parameters)
 

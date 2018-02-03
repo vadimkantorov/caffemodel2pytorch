@@ -43,9 +43,9 @@ class Net(nn.Module):
 		def wrap_function(layer_name, forward):
 			return type('caffe_' + str(layer_name), (nn.Module, ), dict(forward = lambda self, *inputs: forward(*inputs)))()
 
-		def wrap_caffe_python_layer(layer_name, caffe_python_layer, param_str):
+		def wrap_caffe_python_layer(layer_name, caffe_python_layer, param_str, caffe_output_variable_names):
 			caffe_python_layer.param_str = param_str
-			return type('caffe_' + str(layer_name), (nn.Module, ), dict(forward = lambda self, *inputs: CaffePythonLayerFunction(caffe_python_layer)(*inputs), __getattr__ = lambda self, name: nn.Module.__getattr__(self, name) if name in dir(self) else getattr(caffe_python_layer, name)))()
+			return type('caffe_' + str(layer_name), (nn.Module, ), dict(forward = lambda self, *inputs: CaffePythonLayerFunction(caffe_python_layer, caffe_output_variable_names)(*inputs), __getattr__ = lambda self, name: nn.Module.__getattr__(self, name) if name in dir(self) else getattr(caffe_python_layer, name)))()
 
 		for layer in list(self.net_param.layer) + list(self.net_param.layers):
 			layer_type = layer.type if layer.type != 'Python' else layer.python_param.layer
@@ -55,7 +55,7 @@ class Net(nn.Module):
 			if module_constructor is not None:
 				param = to_dict(([v for f, v in layer.ListFields() if f.name.endswith('_param')] + [None])[0])
 				module = module_constructor(param)
-				self.add_module(layer.name, module if isinstance(module, nn.Module) else wrap_caffe_python_layer(layer.name, module, param.get('param_str', '')) if type(module).__name__.endswith('Layer') else wrap_function(layer.name, module))
+				self.add_module(layer.name, module if isinstance(module, nn.Module) else wrap_caffe_python_layer(layer.name, module, param.get('param_str', ''), list(layer.top)) if type(module).__name__.endswith('Layer') else wrap_function(layer.name, module))
 				getattr(self, layer.name).caffe_layer_type = layer_type
 				getattr(self, layer.name).caffe_input_variable_names = list(layer.bottom)
 				getattr(self, layer.name).caffe_output_variable_names = list(layer.top)
@@ -108,10 +108,10 @@ class Net(nn.Module):
 		return list(self.children())
 
 class BlobWrapper(object):
-	NumPyAssignmentAdapter = type('', (object, ), dict(__setitem__ = lambda self, indices, values: setattr(self, 'contents', values)))
+	AssignmentAdapter = type('', (object, ), dict(__setitem__ = lambda self, indices, values: setattr(self, 'contents', values)))
 
 	def __init__(self, data = None, numpy = False):
-		self.data_ = data if data is not None else BlobWrapper.NumPyAssignmentAdapter()
+		self.data_ = data if data is not None else BlobWrapper.AssignmentAdapter()
 		self.numpy = numpy
 
 	@property
@@ -127,18 +127,19 @@ class Layer(object):
 	pass
 
 class CaffePythonLayerFunction(torch.autograd.Function):
-	def __init__(self, caffe_python_layer):
+	def __init__(self, caffe_python_layer, caffe_output_variable_names):
 		self.caffe_python_layer = caffe_python_layer
+		self.caffe_output_variable_names = caffe_output_variable_names
 
 	def forward(self, *inputs):
-		blobs_in = [BlobWrapper(v.numpy()) for v in inputs]
-		blobs_out = collections.defaultdict(BlobWrapper)
+		blobs_in = [BlobWrapper(v.cpu().numpy()) for v in inputs]
+		blobs_out = [BlobWrapper() for i in self.caffe_output_variable_names]
 
 		self.caffe_python_layer.setup(blobs_in, blobs_out)
 		self.caffe_python_layer.setup = lambda *args: None
 
 		self.caffe_python_layer.forward(blobs_in, blobs_out)
-		outputs = tuple(convert_to_gpu_if_enabled(torch.from_numpy(v.data.contents.reshape(*v.shape))) for k, v in sorted(blobs_out.items()))
+		outputs = tuple(convert_to_gpu_if_enabled(torch.from_numpy(v.data.contents.reshape(*v.shape))) for v in blobs_out)
 		return outputs
 
 	def backward(self, grad_output):
@@ -183,7 +184,7 @@ class SGDSolver(object):
 modules = dict(
 	Convolution = lambda param: Convolution(param),
 	InnerProduct = lambda param: InnerProduct(param),
-	Pooling = lambda param: [nn.MaxPool2d, nn.AvgPool2d][param['pool']](kernel_size = param['kernel_size'], stride = param.get('stride', 1), padding = param.get('pad', 0)),
+	Pooling = lambda param: [nn.MaxPool2d, nn.AvgPool2d][param['pool']](kernel_size = first_or(param, 'kernel_size', 1), stride = first_or(param, 'stride', 1), padding = first_or(param, 'pad', 0)),
 	Softmax = lambda param: nn.Softmax(dim = param['axis'] if param else -1),
 	ReLU = lambda ignored: nn.ReLU(),
 	Dropout = lambda param: nn.Dropout(param['dropout_ratio']),
@@ -192,14 +193,14 @@ modules = dict(
 
 class Convolution(nn.Conv2d):
 	def __init__(self, param):
-		super(Convolution, self).__init__(1, param['num_output'], kernel_size = param['kernel_size'][0], stride = param.get('stride', [1])[0], padding = param.get('pad', [0])[0], dilation = param.get('dilation', 1))
-		import IPython; IPython.embed()
+		super(Convolution, self).__init__(1, param['num_output'], kernel_size = first_or(param, 'kernel_size', 1), stride = first_or(param, 'stride', 1), padding = first_or(param, 'pad', 0), dilation = first_or(param, 'dilation', 1))
 		self.weight, self.bias = None, None
 		self.weight_init, self.bias_init = param.get('weight_filler', {}), param.get('bias_filler', {})
 
 	def forward(self, x):
 		if self.weight is None and self.bias is None:
 			super(Convolution, self).__init__(x.size(1), self.out_channels, kernel_size = self.kernel_size, stride = self.stride, padding = self.padding, dilation = self.dilation)
+			convert_to_gpu_if_enabled(self)
 			init_weight_bias(self)
 		return super(Convolution, self).forward(x)
 
@@ -220,6 +221,7 @@ class InnerProduct(nn.Linear):
 	def forward(self, x):
 		if self.weight is None and self.bias is None:
 			super(InnerProduct, self).__init__(x.size(1), self.out_features)
+			convert_to_gpu_if_enabled(self)
 			init_weight_bias(self)
 		return super(InnerProduct, self).forward(x if x.size(-1) == self.in_features else x.view(len(x), -1))
 
@@ -253,6 +255,9 @@ def caffe_pb2_singleton(caffe_proto, codegen_dir):
 
 def convert_to_gpu_if_enabled(obj):
 	return obj
+
+def first_or(param, key, default):
+	return param[key] if isinstance(param.get(key), int) else (param.get(key, []) + [default])[0]
 		
 def to_dict(obj):
 	return list(map(to_dict, obj)) if isinstance(obj, collections.Iterable) else {} if obj is None else {f.name : converter(v) if f.label != FD.LABEL_REPEATED else list(map(converter, v)) for f, v in obj.ListFields() for converter in [{FD.TYPE_DOUBLE: float, FD.TYPE_SFIXED32: float, FD.TYPE_SFIXED64: float, FD.TYPE_SINT32: int, FD.TYPE_SINT64: long, FD.TYPE_FLOAT: float, FD.TYPE_ENUM: int, FD.TYPE_UINT32: int, FD.TYPE_INT64: long, FD.TYPE_UINT64: long, FD.TYPE_INT32: int, FD.TYPE_FIXED64: float, FD.TYPE_FIXED32: float, FD.TYPE_BOOL: bool, FD.TYPE_STRING: unicode, FD.TYPE_BYTES: lambda x: x.encode('string_escape'), FD.TYPE_MESSAGE: to_dict}[f.type]]}

@@ -62,7 +62,7 @@ class Net(nn.Module):
 				caffe_input_variable_names = list(layer.bottom)
 				caffe_output_variable_names = list(layer.top)
 				caffe_loss_weight = (list(layer.loss_weight) or [1.0 if layer_type.upper().endswith('LOSS') else 0.0]) * len(layer.top)
-				caffe_propagate_down = list(layer.propagate_down) or [1] * len(caffe_input_variable_names)
+				caffe_propagate_down = list(getattr(layer, 'propagate_down', [])) or [1] * len(caffe_input_variable_names)
 				caffe_optimization_params = to_dict(layer.param)
 
 				module = module_constructor(param)
@@ -110,7 +110,7 @@ class Net(nn.Module):
 		try:
 			import h5py
 			self.load_state_dict({k : convert_to_gpu_if_enabled(torch.from_numpy(v)) for k, v in h5py.File(weights, 'r')}, strict = False)
-			print('caffemodel2pytorch: loaded model from [{}] in HDF5 format'.format(weights)
+			print('caffemodel2pytorch: loaded model from [{}] in HDF5 format'.format(weights))
 		except:
 			self.net_param.ParseFromString(open(weights).read())
 			for layer in list(self.net_param.layer) + list(self.net_param.layers):
@@ -120,14 +120,14 @@ class Net(nn.Module):
 				parameters = {name : convert_to_gpu_if_enabled(torch.FloatTensor(blob.data)).view(list(blob.shape.dim) if len(blob.shape.dim) > 0 else [blob.num, blob.channels, blob.height, blob.width]) for name, blob in zip(['weight', 'bias'], layer.blobs)}
 				if len(parameters) > 0:
 					module.set_parameters(**parameters)
-			print('caffemodel2pytorch: loaded model from [{}] in caffemodel format'.format(weights)
+			print('caffemodel2pytorch: loaded model from [{}] in caffemodel format'.format(weights))
 
 	def save(self, weights):
 		import h5py
 		with h5py.File(weights, 'w') as h:
 			for k, v in self.state_dict().items():
 				h[k] = v.cpu().numpy()
-		print('caffemodel2pytorch: saved model to [{}] in HDF5 format'.format(weights)
+		print('caffemodel2pytorch: saved model to [{}] in HDF5 format'.format(weights))
 
 	@property
 	def layers(self):
@@ -315,7 +315,10 @@ def init_weight_bias(self):
 
 codegen_dir = tempfile.mkdtemp()
 
+caffe_pb2 = None
+
 def caffe_pb2_singleton(caffe_proto, codegen_dir):
+	global caffe_pb2
 	if codegen_dir != sys.path[0]:
 		local_caffe_proto = os.path.join(codegen_dir, os.path.basename(caffe_proto))
 		with open(local_caffe_proto, 'w') as f:
@@ -326,10 +329,13 @@ def caffe_pb2_singleton(caffe_proto, codegen_dir):
 		old_symdb = google.protobuf.symbol_database._DEFAULT
 		google.protobuf.descriptor._message.default_pool = google.protobuf.descriptor_pool.DescriptorPool()
 		google.protobuf.symbol_database._DEFAULT = google.protobuf.symbol_database.SymbolDatabase(pool = google.protobuf.descriptor._message.default_pool)
-		import caffe_pb2
+		import caffe_pb2 as caffe_pb2
+		#import IPython; IPython.embed()
+		#caffe_pb2 = caffe_pb2_
 		google.protobuf.descriptor._message.default_pool = old_pool
 		google.protobuf.symbol_database._DEFAULT = old_symdb
-	return sys.modules['caffe_pb2']
+		sys.modules[__name__ + '.proto'] = sys.modules[__name__]
+	return caffe_pb2#sys.modules['caffe_pb2_']
 
 def convert_to_gpu_if_enabled(obj):
 	return obj

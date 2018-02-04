@@ -215,19 +215,29 @@ class SGDSolver(object):
 		for i in range(iterations):
 			if self.optimizer is not None:
 				self.optimizer.zero_grad()
-
+			
+			loss_batch = 0
+			losses_batch = collections.defaultdict(float)
 			for j in range(self.iter_size):
-				outputs = self.net(**inputs)
-				loss = sum([self.net.blob_loss_weights[k] * v.sum() for k, v in outputs.items() if self.net.blob_loss_weights[k] != 0])
-				loss_total += float(loss)
+				outputs = filter(lambda k, v: self.net.blob_loss_weights[k] != 0, self.net(**inputs).items())
+				loss = sum([self.net.blob_loss_weights[k] * v.sum() for k, v in outputs])
+				loss_batch += float(loss)
+				for k, v in outputs:
+					losses_batch[k] += float(v.sum())
 				if self.optimizer is None:
 					self.init_optimizer_scheduler()
 					self.optimizer.zero_grad()
 				loss.backward()
 
+			loss_total += loss_batch
 			self.optimizer.step()
 			self.scheduler.step()
 			self.iter += 1
+			log_prefix = __module__.__name__ + '.' + type(self).__name__ 
+			print('{}] Iteration {}, loss: {}'.format(log_prefix, self.iter, loss_batch))
+			for i, (name, loss) in enumerate(sorted(losses_batch.items())):
+				print('{}]     Train net output #{}: {} = {} (* {} = {} loss)'.format(log_prefix, i, name, loss, self.net.blob_loss_weights[name], self.net.blob_loss_weights[name] * loss))
+				
 		return loss_total
 
 modules = dict(

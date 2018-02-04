@@ -250,6 +250,7 @@ class SGDSolver(object):
 			print('{}] Iteration {}, loss: {}'.format(log_prefix, self.iter, loss_batch))
 			for i, (name, loss) in enumerate(sorted(losses_batch.items())):
 				print('{}]     Train net output #{}: {} = {} (* {} = {} loss)'.format(log_prefix, i, name, loss, self.net.blob_loss_weights[name], self.net.blob_loss_weights[name] * loss))
+			sys.stdout.flush()
 				
 		return loss_total
 
@@ -313,13 +314,11 @@ def init_weight_bias(self):
 		elif init.get('type') == 'constant':
 			nn.init.constant(tensor, val = init['value'])
 
-codegen_dir = tempfile.mkdtemp()
-
 caffe_pb2 = None
 
-def caffe_pb2_singleton(caffe_proto, codegen_dir):
+def caffe_pb2_singleton(caffe_proto, codegen_dir = tempfile.mkdtemp()):
 	global caffe_pb2
-	if codegen_dir != sys.path[0]:
+	if caffe_pb2 is None:
 		local_caffe_proto = os.path.join(codegen_dir, os.path.basename(caffe_proto))
 		with open(local_caffe_proto, 'w') as f:
 			f.write((urlopen if 'http' in caffe_proto else open)(caffe_proto).read())
@@ -330,12 +329,10 @@ def caffe_pb2_singleton(caffe_proto, codegen_dir):
 		google.protobuf.descriptor._message.default_pool = google.protobuf.descriptor_pool.DescriptorPool()
 		google.protobuf.symbol_database._DEFAULT = google.protobuf.symbol_database.SymbolDatabase(pool = google.protobuf.descriptor._message.default_pool)
 		import caffe_pb2 as caffe_pb2
-		#import IPython; IPython.embed()
-		#caffe_pb2 = caffe_pb2_
 		google.protobuf.descriptor._message.default_pool = old_pool
 		google.protobuf.symbol_database._DEFAULT = old_symdb
 		sys.modules[__name__ + '.proto'] = sys.modules[__name__]
-	return caffe_pb2#sys.modules['caffe_pb2_']
+	return caffe_pb2
 
 def convert_to_gpu_if_enabled(obj):
 	return obj

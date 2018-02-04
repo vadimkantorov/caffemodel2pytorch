@@ -107,14 +107,27 @@ class Net(nn.Module):
 		return {k : v.detach().cpu().numpy() if numpy else v for k, v in variables.items() if k in caffe_output_variable_names}
 
 	def copy_from(self, weights):
-		self.net_param.ParseFromString(open(weights).read())
-		for layer in list(self.net_param.layer) + list(self.net_param.layers):
-			module = getattr(self, layer.name, None)
-			if module is None:
-				continue
-			parameters = {name : convert_to_gpu_if_enabled(torch.FloatTensor(blob.data)).view(list(blob.shape.dim) if len(blob.shape.dim) > 0 else [blob.num, blob.channels, blob.height, blob.width]) for name, blob in zip(['weight', 'bias'], layer.blobs)}
-			if len(parameters) > 0:
-				module.set_parameters(**parameters)
+		try:
+			import h5py
+			self.load_state_dict({k : convert_to_gpu_if_enabled(torch.from_numpy(v)) for k, v in h5py.File(weights, 'r')}, strict = False)
+			print('caffemodel2pytorch: loaded model from [{}] in HDF5 format'.format(weights)
+		except:
+			self.net_param.ParseFromString(open(weights).read())
+			for layer in list(self.net_param.layer) + list(self.net_param.layers):
+				module = getattr(self, layer.name, None)
+				if module is None:
+					continue
+				parameters = {name : convert_to_gpu_if_enabled(torch.FloatTensor(blob.data)).view(list(blob.shape.dim) if len(blob.shape.dim) > 0 else [blob.num, blob.channels, blob.height, blob.width]) for name, blob in zip(['weight', 'bias'], layer.blobs)}
+				if len(parameters) > 0:
+					module.set_parameters(**parameters)
+			print('caffemodel2pytorch: loaded model from [{}] in caffemodel format'.format(weights)
+
+	def save(self, weights):
+		import h5py
+		with h5py.File(weights, 'w') as h:
+			for k, v in self.state_dict().items():
+				h[k] = v.cpu().numpy()
+		print('caffemodel2pytorch: saved model to [{}] in HDF5 format'.format(weights)
 
 	@property
 	def layers(self):

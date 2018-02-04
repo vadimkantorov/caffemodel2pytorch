@@ -42,7 +42,7 @@ class Net(nn.Module):
 		weights = weights or (args + (None, None))[0]
 		phase = phase or (args + (None, None))[1]
 
-		self.net_param = caffe_pb2_singleton(caffe_proto_, codegen_dir).NetParameter()
+		self.net_param = caffe_pb2_singleton(caffe_proto_).NetParameter()
 		google.protobuf.text_format.Parse(open(prototxt).read(), self.net_param)
 
 		def wrap_function(layer_name, forward):
@@ -209,7 +209,7 @@ class Layer(torch.autograd.Function):
 			
 class SGDSolver(object):
 	def __init__(self, solver_prototxt):
-		solver_param = caffe_pb2_singleton(caffe_proto, codegen_dir).SolverParameter()
+		solver_param = caffe_pb2_singleton(caffe_proto).SolverParameter()
 		google.protobuf.text_format.Parse(open(solver_prototxt).read(), solver_param)
 		solver_param = to_dict(solver_param)
 		self.net = Net(solver_param.get('train_net') or solver_param.get('net'), phase = TRAIN)
@@ -232,7 +232,7 @@ class SGDSolver(object):
 			loss_batch = 0
 			losses_batch = collections.defaultdict(float)
 			for j in range(self.iter_size):
-				outputs = filter(lambda k, v: self.net.blob_loss_weights[k] != 0, self.net(**inputs).items())
+				outputs = filter(lambda kv: self.net.blob_loss_weights[kv[0]] != 0, self.net(**inputs).items())
 				loss = sum([self.net.blob_loss_weights[k] * v.sum() for k, v in outputs])
 				loss_batch += float(loss)
 				for k, v in outputs:
@@ -246,11 +246,11 @@ class SGDSolver(object):
 			self.optimizer.step()
 			self.scheduler.step()
 			self.iter += 1
-			log_prefix = __module__.__name__ + '.' + type(self).__name__ 
+
+			log_prefix = self.__module__ + '.' + type(self).__name__ 
 			print('{}] Iteration {}, loss: {}'.format(log_prefix, self.iter, loss_batch))
 			for i, (name, loss) in enumerate(sorted(losses_batch.items())):
 				print('{}]     Train net output #{}: {} = {} (* {} = {} loss)'.format(log_prefix, i, name, loss, self.net.blob_loss_weights[name], self.net.blob_loss_weights[name] * loss))
-			sys.stdout.flush()
 				
 		return loss_total
 

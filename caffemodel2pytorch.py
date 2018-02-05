@@ -104,10 +104,18 @@ class Net(nn.Module):
 	def copy_from(self, weights):
 		try:
 			import h5py
-			self.load_state_dict({k : convert_to_gpu_if_enabled(torch.from_numpy(v)) for k, v in h5py.File(weights, 'r')}, strict = False)
+			state_dict = self.state_dict()
+			for k, v in h5py.File(weights, 'r').items():
+				if k in state_dict:
+					v = convert_to_gpu_if_enabled(torch.from_numpy(v.__array__()))
+					state_dict[k].resize_(v.size()).copy_(v)
 			print('caffemodel2pytorch: loaded model from [{}] in HDF5 format'.format(weights))
-		except:
-			self.net_param.ParseFromString(open(weights).read())
+		except Exception, e:
+			print('caffemodel2pytorch: loading model from [{}] in HDF5 format failed [{}], falling back to caffemodel format'.format(weights, e.message))
+			bytes_weights = open(weights).read()
+			bytes_parsed = self.net_param.ParseFromString(bytes_weights)
+			if bytes_parsed != len(bytes_weights):
+				print('caffemodel2pytorch: loading model from [{}] in caffemodel format, WARNING: file length [{}] is not equal to number of parsed bytes [{}]'.format(weights, len(bytes_weights), bytes_parsed))
 			for layer in list(self.net_param.layer) + list(self.net_param.layers):
 				module = getattr(self, layer.name, None)
 				if module is None:
@@ -264,11 +272,11 @@ modules = dict(
 class Convolution(nn.Conv2d):
 	def __init__(self, param):
 		super(Convolution, self).__init__(1, param['num_output'], kernel_size = first_or(param, 'kernel_size', 1), stride = first_or(param, 'stride', 1), padding = first_or(param, 'pad', 0), dilation = first_or(param, 'dilation', 1))
-		self.weight, self.bias = None, None
+		self.weight, self.bias = nn.Parameter(), nn.Parameter()
 		self.weight_init, self.bias_init = param.get('weight_filler', {}), param.get('bias_filler', {})
 
 	def forward(self, x):
-		if self.weight is None and self.bias is None:
+		if self.weight.numel() == 0 and self.bias.numel() == 0:
 			super(Convolution, self).__init__(x.size(1), self.out_channels, kernel_size = self.kernel_size, stride = self.stride, padding = self.padding, dilation = self.dilation)
 			convert_to_gpu_if_enabled(self)
 			init_weight_bias(self)
@@ -285,11 +293,11 @@ class Convolution(nn.Conv2d):
 class InnerProduct(nn.Linear):
 	def __init__(self, param):
 		super(InnerProduct, self).__init__(1, param['num_output'])
-		self.weight, self.bias = None, None
+		self.weight, self.bias = nn.Parameter(), nn.Parameter()
 		self.weight_init, self.bias_init = param.get('weight_filler', {}), param.get('bias_filler', {})
 
 	def forward(self, x):
-		if self.weight is None and self.bias is None:
+		if self.weight.numel() == 0 and self.bias.numel() == 0:
 			super(InnerProduct, self).__init__(x.size(1), self.out_features)
 			convert_to_gpu_if_enabled(self)
 			init_weight_bias(self)

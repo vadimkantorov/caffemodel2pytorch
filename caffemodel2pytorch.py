@@ -8,12 +8,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-import google.protobuf.text_format
-import google.protobuf.descriptor
-import google.protobuf.descriptor_pool
-import google.protobuf.symbol_database
-from google.protobuf.descriptor import FieldDescriptor as FD
-
 try:
 	from urllib2 import urlopen
 except:
@@ -43,6 +37,7 @@ class Net(nn.Module):
 		phase = phase or (args + (None, None))[1]
 
 		self.net_param = caffe_pb2_singleton(caffe_proto_).NetParameter()
+		import google.protobuf.text_format
 		google.protobuf.text_format.Parse(open(prototxt).read(), self.net_param)
 
 		def wrap_function(layer_name, forward):
@@ -210,6 +205,7 @@ class Layer(torch.autograd.Function):
 class SGDSolver(object):
 	def __init__(self, solver_prototxt):
 		solver_param = caffe_pb2_singleton(caffe_proto).SolverParameter()
+		import google.protobuf.text_format
 		google.protobuf.text_format.Parse(open(solver_prototxt).read(), solver_param)
 		solver_param = to_dict(solver_param)
 		self.net = Net(solver_param.get('train_net') or solver_param.get('net'), phase = TRAIN)
@@ -251,6 +247,7 @@ class SGDSolver(object):
 			print('{}] Iteration {}, loss: {}'.format(log_prefix, self.iter, loss_batch))
 			for i, (name, loss) in enumerate(sorted(losses_batch.items())):
 				print('{}]     Train net output #{}: {} = {} (* {} = {} loss)'.format(log_prefix, i, name, loss, self.net.blob_loss_weights[name], self.net.blob_loss_weights[name] * loss))
+			print('{}] Iteration {}, lr = {}'.format(log_prefix, self.iter, self.optimizer_params['lr']))
 				
 		return loss_total
 
@@ -324,6 +321,9 @@ def caffe_pb2_singleton(caffe_proto, codegen_dir = tempfile.mkdtemp()):
 			f.write((urlopen if 'http' in caffe_proto else open)(caffe_proto).read())
 		subprocess.check_call(['protoc', '--proto_path', os.path.dirname(local_caffe_proto), '--python_out', codegen_dir, local_caffe_proto])
 		sys.path.insert(0, codegen_dir)
+		import google.protobuf.descriptor
+		import google.protobuf.descriptor_pool
+		import google.protobuf.symbol_database
 		old_pool = google.protobuf.descriptor._message.default_pool
 		old_symdb = google.protobuf.symbol_database._DEFAULT
 		google.protobuf.descriptor._message.default_pool = google.protobuf.descriptor_pool.DescriptorPool()
@@ -341,4 +341,6 @@ def first_or(param, key, default):
 	return param[key] if isinstance(param.get(key), int) else (param.get(key, []) + [default])[0]
 		
 def to_dict(obj):
+	from google.protobuf.descriptor import FieldDescriptor as FD
 	return list(map(to_dict, obj)) if isinstance(obj, collections.Iterable) else {} if obj is None else {f.name : converter(v) if f.label != FD.LABEL_REPEATED else list(map(converter, v)) for f, v in obj.ListFields() for converter in [{FD.TYPE_DOUBLE: float, FD.TYPE_SFIXED32: float, FD.TYPE_SFIXED64: float, FD.TYPE_SINT32: int, FD.TYPE_SINT64: long, FD.TYPE_FLOAT: float, FD.TYPE_ENUM: int, FD.TYPE_UINT32: int, FD.TYPE_INT64: long, FD.TYPE_UINT64: long, FD.TYPE_INT32: int, FD.TYPE_FIXED64: float, FD.TYPE_FIXED32: float, FD.TYPE_BOOL: bool, FD.TYPE_STRING: unicode, FD.TYPE_BYTES: lambda x: x.encode('string_escape'), FD.TYPE_MESSAGE: to_dict}[f.type]]}
+

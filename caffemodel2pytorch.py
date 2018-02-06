@@ -57,7 +57,7 @@ class Net(nn.Module):
 				caffe_input_variable_names = list(layer.bottom)
 				caffe_output_variable_names = list(layer.top)
 				caffe_loss_weight = (list(layer.loss_weight) or [1.0 if layer_type.upper().endswith('LOSS') else 0.0]) * len(layer.top)
-				caffe_propagate_down = list(getattr(layer, 'propagate_down', [])) or [1] * len(caffe_input_variable_names)
+				caffe_propagate_down = list(getattr(layer, 'propagate_down', [])) or [True] * len(caffe_input_variable_names)
 				caffe_optimization_params = to_dict(layer.param)
 
 				module = module_constructor(param)
@@ -90,7 +90,7 @@ class Net(nn.Module):
 		for module in [module for module in self.children() if not all([name in variables for name in module.caffe_output_variable_names])]:
 			for name in module.caffe_input_variable_names:
 				assert name in variables, 'Variable [{}] does not exist. Pass it as a keyword argument or provide a layer which produces it.'.format(name)
-			inputs = [variables[name] if propagate_down != 0 else variables[name].detach() for name, propagate_down in zip(module.caffe_input_variable_names, module.caffe_propagate_down)]
+			inputs = [variables[name] if propagate_down else variables[name].detach() for name, propagate_down in zip(module.caffe_input_variable_names, module.caffe_propagate_down)]
 			outputs = module(*inputs)
 
 			if not isinstance(outputs, tuple):
@@ -207,7 +207,7 @@ class Layer(torch.autograd.Function):
 		bottom = [Blob(data = v.cpu().numpy()) for v in inputs]
 		top = [Blob(data = output.cpu().numpy(), diff = grad_output.cpu().numpy()) for grad_output, output in zip(grad_outputs, outputs)]
 		self.caffe_python_layer.backward(top, self.caffe_propagate_down, bottom)
-		return tuple(convert_to_gpu_if_enabled(torch.from_numpy(blob.diff.contents.reshape(*v.reshape))) if propagate_down != 0 else None for v, propagate_down in zip(bottom, self.caffe_propagate_down))
+		return tuple(convert_to_gpu_if_enabled(torch.from_numpy(blob.diff.contents.reshape(*v.reshape))) if propagate_down else None for v, propagate_down in zip(bottom, self.caffe_propagate_down))
 			
 class SGDSolver(object):
 	def __init__(self, solver_prototxt):

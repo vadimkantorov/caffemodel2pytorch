@@ -103,12 +103,11 @@ class Net(nn.Module):
 
 	def copy_from(self, weights):
 		try:
-			import h5py
+			import h5py, numpy
 			state_dict = self.state_dict()
 			for k, v in h5py.File(weights, 'r').items():
 				if k in state_dict:
-					v = convert_to_gpu_if_enabled(torch.from_numpy(v.__array__()))
-					state_dict[k].resize_(v.size()).copy_(v)
+					state_dict[k].resize_(v.shape).copy_(torch.from_numpy(numpy.array(v)))
 			print('caffemodel2pytorch: loaded model from [{}] in HDF5 format'.format(weights))
 		except Exception, e:
 			print('caffemodel2pytorch: loading model from [{}] in HDF5 format failed [{}], falling back to caffemodel format'.format(weights, e.message))
@@ -142,8 +141,14 @@ class Blob(object):
 	def __init__(self, data = None, diff = None, numpy = False):
 		self.data_ = data if data is not None else Blob.AssignmentAdapter()
 		self.diff_ = diff if diff is not None else Blob.AssignmentAdapter()
-		self.numpy = numpy
 		self.shape_ = None
+		self.numpy = numpy
+
+	def reshape(self, *args):
+		self.shape_ = args
+
+	def count(self, *axis):
+		return reduce(lambda x, y: x * y, self.shape_[slice(*(axis + [-1])[:2])])
 
 	@property
 	def data(self):
@@ -156,12 +161,6 @@ class Blob(object):
 		if self.numpy and isinstance(self.diff_, torch.autograd.Variable):
 			self.diff_ = self.diff_.detach().cpu().numpy()
 		return self.diff_
-
-	def reshape(self, *args):
-		self.shape_ = args
-
-	def count(self, *axis):
-		return reduce(lambda x, y: x * y, self.shape_[slice(*(axis + [-1])[:2])])
 
 	@property
 	def shape(self):
@@ -263,7 +262,7 @@ modules = dict(
 	Convolution = lambda param: Convolution(param),
 	InnerProduct = lambda param: InnerProduct(param),
 	Pooling = lambda param: [nn.MaxPool2d, nn.AvgPool2d][param['pool']](kernel_size = first_or(param, 'kernel_size', 1), stride = first_or(param, 'stride', 1), padding = first_or(param, 'pad', 0)),
-	Softmax = lambda param: nn.Softmax(dim = param['axis'] if param else -1),
+	Softmax = lambda param: nn.Softmax(dim = param.get('axis', -1)),
 	ReLU = lambda ignored: nn.ReLU(),
 	Dropout = lambda param: nn.Dropout(param['dropout_ratio']),
 	Eltwise = lambda param: [torch.mul, torch.add, torch.max][param['operation']]

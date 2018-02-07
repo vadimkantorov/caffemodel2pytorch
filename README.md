@@ -13,7 +13,7 @@ Of course it is very incomplete. Currently it supports the following Caffe layer
 * eltwise (prod, sum, max)
 * softmax (axis)
 
-Adding many other layers and loss functions is trivial, as you can see from the definition of the `modules` dictionary in the code.
+The layer support isn't as complete as in https://github.com/marvis/pytorch-caffe, but adding layers and loss functions is trivial as you can see from the definition of the `modules` dictionary in the code. The advantages of this converter are: lightweight code; easy extensibility; mimicking the pycaffe API, allowing drop-in scripts to change backend to PyTorch for existing pycaffe training pipelines (example for [OICR](https://github.com/ppengtang/oicr) is below).
 
 PRs to enable other layers or layer params are very welcome!
 
@@ -108,4 +108,10 @@ solver.net.copy_from('oicr/data/imagenet_models/VGG16.v2.caffemodel')
 # runs one iteration of forward, backward, optimization; returns a float loss value
 # data layer must be registered or inputs must be provided as keyword arguments
 loss = solver.step(1)
+```
+
+## Drop-in script for OICR enabling PyTorch as backend for eval and training
+```python
+# caffe_python_roast.py
+
 ```

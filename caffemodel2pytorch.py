@@ -13,6 +13,12 @@ try:
 except:
 	from urllib.request import urlopen
 
+import google.protobuf.descriptor
+import google.protobuf.descriptor_pool
+import google.protobuf.symbol_database
+import google.protobuf.text_format
+from google.protobuf.descriptor import FieldDescriptor as FD
+
 caffe_proto = 'https://raw.githubusercontent.com/BVLC/caffe/master/src/caffe/proto/caffe.proto'
 
 TRAIN = 0
@@ -37,7 +43,6 @@ class Net(nn.Module):
 		phase = phase or (args + (None, None))[1]
 
 		self.net_param = caffe_pb2_singleton(caffe_proto_).NetParameter()
-		import google.protobuf.text_format
 		google.protobuf.text_format.Parse(open(prototxt).read(), self.net_param)
 
 		def wrap_function(layer_name, forward):
@@ -218,7 +223,7 @@ class SGDSolver(object):
 		self.net = Net(solver_param.get('train_net') or solver_param.get('net'), phase = TRAIN)
 		self.iter = 1
 		self.iter_size = solver_param.get('iter_size', 1)
-		self.optimizer_params = dict(lr = solver_param.get('base_lr'), momentum = solver_param.get('momentum', 0), weight_decay = solver_param.get('weight_decay', 0))
+		self.optimizer_params = dict(lr = solver_param.get('base_lr') / self.iter_size, momentum = solver_param.get('momentum', 0), weight_decay = solver_param.get('weight_decay', 0))
 		self.lr_scheduler_params = dict(policy = solver_param.get('lr_policy'), step_size = solver_param.get('stepsize'), gamma = solver_param.get('gamma'))
 		self.optimizer, self.scheduler = None, None
 
@@ -237,9 +242,9 @@ class SGDSolver(object):
 			for j in range(self.iter_size):
 				outputs = filter(lambda kv: self.net.blob_loss_weights[kv[0]] != 0, self.net(**inputs).items())
 				loss = sum([self.net.blob_loss_weights[k] * v.sum() for k, v in outputs])
-				loss_batch += float(loss)
+				loss_batch += float(loss) / self.iter_size
 				for k, v in outputs:
-					losses_batch[k] += float(v.sum())
+					losses_batch[k] += float(v.sum()) / self.iter_size
 				if self.optimizer is None:
 					self.init_optimizer_scheduler()
 					self.optimizer.zero_grad()
@@ -328,9 +333,6 @@ def caffe_pb2_singleton(caffe_proto, codegen_dir = tempfile.mkdtemp()):
 			f.write((urlopen if 'http' in caffe_proto else open)(caffe_proto).read())
 		subprocess.check_call(['protoc', '--proto_path', os.path.dirname(local_caffe_proto), '--python_out', codegen_dir, local_caffe_proto])
 		sys.path.insert(0, codegen_dir)
-		import google.protobuf.descriptor
-		import google.protobuf.descriptor_pool
-		import google.protobuf.symbol_database
 		old_pool = google.protobuf.descriptor._message.default_pool
 		old_symdb = google.protobuf.symbol_database._DEFAULT
 		google.protobuf.descriptor._message.default_pool = google.protobuf.descriptor_pool.DescriptorPool()
@@ -348,6 +350,5 @@ def first_or(param, key, default):
 	return param[key] if isinstance(param.get(key), int) else (param.get(key, []) + [default])[0]
 		
 def to_dict(obj):
-	from google.protobuf.descriptor import FieldDescriptor as FD
 	return list(map(to_dict, obj)) if isinstance(obj, collections.Iterable) else {} if obj is None else {f.name : converter(v) if f.label != FD.LABEL_REPEATED else list(map(converter, v)) for f, v in obj.ListFields() for converter in [{FD.TYPE_DOUBLE: float, FD.TYPE_SFIXED32: float, FD.TYPE_SFIXED64: float, FD.TYPE_SINT32: int, FD.TYPE_SINT64: long, FD.TYPE_FLOAT: float, FD.TYPE_ENUM: int, FD.TYPE_UINT32: int, FD.TYPE_INT64: long, FD.TYPE_UINT64: long, FD.TYPE_INT32: int, FD.TYPE_FIXED64: float, FD.TYPE_FIXED32: float, FD.TYPE_BOOL: bool, FD.TYPE_STRING: unicode, FD.TYPE_BYTES: lambda x: x.encode('string_escape'), FD.TYPE_MESSAGE: to_dict}[f.type]]}
 

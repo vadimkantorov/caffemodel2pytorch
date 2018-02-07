@@ -1,10 +1,10 @@
 ## Description
 This converter can be useful for porting Caffe code and layers to PyTorch. Features:
 * load Caffe models and use them from PyTorch
-* mock PyCaffe API to allow for smooth porting of Caffe-using code
-* wrapping Caffe's Python layers
+* mock PyCaffe API to allow for smooth porting of Caffe-using code (drop-in script for [OICR](https://github.com/ppengtang/oicr) for changing backend in train/eval to PyTorch is below)
+* wrapping Caffe's Python layers (see the OICR example)
 
-Of course it is very incomplete. Currently it supports the following Caffe layers:
+The layer support isn't as complete as in https://github.com/marvis/pytorch-caffe. Currently it supports the following Caffe layers:
 * convolution (num_output, kernel_size, stride, pad, dilation; constant and gaussian weight/bias fillers)
 * inner_product (num_output; constant and gaussian weight/bias fillers)
 * max / avg pooling (kernel_size, stride, pad)
@@ -13,9 +13,7 @@ Of course it is very incomplete. Currently it supports the following Caffe layer
 * eltwise (prod, sum, max)
 * softmax (axis)
 
-The layer support isn't as complete as in https://github.com/marvis/pytorch-caffe, but adding layers and loss functions is trivial as you can see from the definition of the `modules` dictionary in the code. The advantages of this converter are: lightweight code; easy extensibility; mimicking the pycaffe API, allowing drop-in scripts to change backend to PyTorch for existing pycaffe training pipelines (example for [OICR](https://github.com/ppengtang/oicr) is below).
-
-PRs to enable other layers or layer params are very welcome!
+PRs to enable other layers or layer params are very welcome (see the definition of the `modules` dictionary in the code)!
 
 ## Run Caffe models using PyTorch as backend
 ```python

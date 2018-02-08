@@ -64,7 +64,7 @@ class Net(nn.Module):
 				caffe_loss_weight = (list(layer.loss_weight) or [1.0 if layer_type.upper().endswith('LOSS') else 0.0]) * len(layer.top)
 				caffe_propagate_down = list(getattr(layer, 'propagate_down', [])) or [True] * len(caffe_input_variable_names)
 				caffe_optimization_params = to_dict(layer.param)
-
+				param['inplace'] = len(caffe_input_variable_names) == 1 and caffe_input_variable_names == caffe_output_variable_names
 				module = module_constructor(param)
 				self.add_module(layer.name, module if isinstance(module, nn.Module) else wrap_caffe_python_layer(layer.name, module, caffe_input_variable_names, caffe_output_variable_names, param.get('param_str', '')) if type(module).__name__.endswith('Layer') else wrap_function(layer.name, module))
 				module = getattr(self, layer.name)
@@ -268,8 +268,8 @@ modules = dict(
 	InnerProduct = lambda param: InnerProduct(param),
 	Pooling = lambda param: [nn.MaxPool2d, nn.AvgPool2d][param['pool']](kernel_size = first_or(param, 'kernel_size', 1), stride = first_or(param, 'stride', 1), padding = first_or(param, 'pad', 0)),
 	Softmax = lambda param: nn.Softmax(dim = param.get('axis', -1)),
-	ReLU = lambda ignored: nn.ReLU(),
-	Dropout = lambda param: nn.Dropout(param['dropout_ratio']),
+	ReLU = lambda param: nn.ReLU(inplace = param['inplace']),
+	Dropout = lambda param: nn.Dropout(p = param['dropout_ratio'], inplace = param['inplace']),
 	Eltwise = lambda param: [torch.mul, torch.add, torch.max][param['operation']]
 )
 

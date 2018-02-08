@@ -1,7 +1,8 @@
 ## Description
 This converter can be useful for porting Caffe code and layers to PyTorch. Features:
 * load Caffe models and use them from PyTorch
-* mock PyCaffe API to allow for smooth porting of Caffe-using code (drop-in script for [OICR](https://github.com/ppengtang/oicr) for changing backend in train/eval to PyTorch is below)
+* mock PyCaffe API to allow for smooth porting of Caffe-using code (drop-in script for [OICR](https://github.com/ppengtang/oicr) for changing backend in train/eval to PyTorch is below):
+  * Net, Blob, SGDSolver
 * wrapping Caffe's Python layers (see the OICR example)
 
 The layer support isn't as complete as in https://github.com/marvis/pytorch-caffe. Currently it supports the following Caffe layers:

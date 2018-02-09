@@ -110,7 +110,7 @@ def WeightedSoftmaxWithLoss(prob, labels_ic, cls_loss_weights):
 	valid_sum = cls_loss_weights.gt(1e-12).float().sum()
 	return loss.sum() / (loss.numel() if valid_sum == 0 else valid_sum)
 
-caffemodel2pytorch.initialize('./caffe-oicr/src/caffe/proto/caffe.proto')
+caffemodel2pytorch.initialize('./caffe-oicr/src/caffe/proto/caffe.proto') # needs to be called explicitly for these porting scenarios to enable caffe.proto.caffe_pb2 variable
 caffemodel2pytorch.set_mode_gpu()
 caffemodel2pytorch.modules['GlobalSumPooling'] = lambda param: lambda pred: pred.sum(dim = 0, keepdim = True)
 caffemodel2pytorch.modules['MulticlassCrossEntropyLoss'] = lambda param: lambda pred, labels: F.binary_cross_entropy(pred.clamp(1e-6, 1 - 1e-6), labels)

@@ -34,7 +34,7 @@ class Net(nn.Module):
 	def __init__(self, prototxt, *args, **kwargs):
 		super(Net, self).__init__()
 		# to account for both constructors, see https://github.com/BVLC/caffe/blob/master/python/caffe/test/test_net.py#L145-L147
-		caffe_proto_ = kwargs.pop('caffe_proto', None) or caffe_proto
+		caffe_proto = kwargs.pop('caffe_proto', None) 
 		weights = kwargs.pop('weights', None)
 		phase = kwargs.pop('phase', None)
 		weights = weights or (args + (None, None))[0]

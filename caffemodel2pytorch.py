@@ -42,7 +42,7 @@ class Net(nn.Module):
 		weights = weights or (args + (None, None))[0]
 		phase = phase or (args + (None, None))[1]
 
-		self.net_param = caffe_pb2_singleton(caffe_proto_).NetParameter()
+		self.net_param = initialize(caffe_proto).NetParameter()
 		google.protobuf.text_format.Parse(open(prototxt).read(), self.net_param)
 
 		def wrap_function(layer_name, forward):
@@ -216,8 +216,7 @@ class Layer(torch.autograd.Function):
 			
 class SGDSolver(object):
 	def __init__(self, solver_prototxt):
-		solver_param = caffe_pb2_singleton(caffe_proto).SolverParameter()
-		import google.protobuf.text_format
+		solver_param = initialize(caffe_proto).SolverParameter()
 		google.protobuf.text_format.Parse(open(solver_prototxt).read(), solver_param)
 		solver_param = to_dict(solver_param)
 		self.net = Net(solver_param.get('train_net') or solver_param.get('net'), phase = TRAIN)
@@ -325,10 +324,10 @@ def init_weight_bias(self):
 
 caffe_pb2 = None
 
-def caffe_pb2_singleton(caffe_proto, codegen_dir = tempfile.mkdtemp()):
+def initialize(caffe_proto_override = None, codegen_dir = tempfile.mkdtemp()):
 	global caffe_pb2
 	if caffe_pb2 is None:
-		local_caffe_proto = os.path.join(codegen_dir, os.path.basename(caffe_proto))
+		local_caffe_proto = os.path.join(codegen_dir, os.path.basename(caffe_proto_override or caffe_proto))
 		with open(local_caffe_proto, 'w') as f:
 			f.write((urlopen if 'http' in caffe_proto else open)(caffe_proto).read())
 		subprocess.check_call(['protoc', '--proto_path', os.path.dirname(local_caffe_proto), '--python_out', codegen_dir, local_caffe_proto])
@@ -341,6 +340,7 @@ def caffe_pb2_singleton(caffe_proto, codegen_dir = tempfile.mkdtemp()):
 		google.protobuf.descriptor._message.default_pool = old_pool
 		google.protobuf.symbol_database._DEFAULT = old_symdb
 		sys.modules[__name__ + '.proto'] = sys.modules[__name__]
+		sys.modules['caffe'] = sys.modules[__name__]
 	return caffe_pb2
 
 def convert_to_gpu_if_enabled(obj):

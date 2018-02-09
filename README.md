@@ -310,7 +310,7 @@ class RoiPooling(torch.autograd.Function):
 		rois, = self.saved_tensors
 		grad_input = torch.cuda.FloatTensor(*self.input_size).zero_()
 		RoiPooling.compiled_backward(grid = (RoiPooling.GET_BLOCKS(grad_input.numel()), 1, 1), block = (RoiPooling.CUDA_NUM_THREADS, 1, 1), args=[
-			grad_input.numel(), grad_output.data_ptr(), self.argmax.data_ptr(), len(grad_output), self.spatial_scale, self.input_size[-3],
+			grad_input.numel(), grad_output.data_ptr(), self.argmax.data_ptr(), len(rois), self.spatial_scale, self.input_size[-3],
 			self.input_size[-2], self.input_size[-1], self.pooled_height, self.pooled_width, grad_input.data_ptr(), rois.data_ptr()
 			  ], stream=RoiPooling.Stream(ptr=torch.cuda.current_stream().cuda_stream))
 		return grad_input, None

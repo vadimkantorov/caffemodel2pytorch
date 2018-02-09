@@ -96,14 +96,11 @@ Place `caffe_pytorch_oicr.py` and `caffemodel2pytorch.py` in the root `oicr` dir
 ```python
 # caffe_pytorch_oicr.py
 
-import sys
 import collections
 import torch
-import caffemodel2pytorch
 import torch.nn.functional as F
 import cupy
-
-sys.modules['caffe'] = caffemodel2pytorch
+import caffemodel2pytorch
 
 def WeightedSoftmaxWithLoss(prob, labels_ic, cls_loss_weights):
 	loss = -cls_loss_weights * F.log_softmax(prob, dim = -1).gather(-1, labels_ic.long().unsqueeze(-1)).squeeze(-1)

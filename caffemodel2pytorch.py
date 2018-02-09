@@ -66,12 +66,15 @@ class Net(nn.Module):
 				module = module_constructor(param)
 				self.add_module(layer.name, module if isinstance(module, nn.Module) else wrap_caffe_python_layer(layer.name, module, caffe_input_variable_names, caffe_output_variable_names, param.get('param_str', '')) if type(module).__name__.endswith('Layer') else wrap_function(layer.name, module))
 				module = getattr(self, layer.name)
+				module.caffe_layer_name = layer.name
 				module.caffe_layer_type = layer_type
 				module.caffe_input_variable_names = caffe_input_variable_names
 				module.caffe_output_variable_names = caffe_output_variable_names
 				module.caffe_loss_weight = caffe_loss_weight
 				module.caffe_propagate_down = caffe_propagate_down
 				module.caffe_optimization_params = caffe_optimization_params
+				for optim_param, p in zip(caffe_optimization_params, module.parameters()):
+					p.requires_grad = optim_param.get('lr_mult', 1) != 0
 			else:
 				print('Skipping layer [{}, {}, {}]: not found in caffemodel2pytorch.modules dict'.format(layer.name, layer_type, layer.type))
 
@@ -95,7 +98,6 @@ class Net(nn.Module):
 				assert name in variables, 'Variable [{}] does not exist. Pass it as a keyword argument or provide a layer which produces it.'.format(name)
 			inputs = [variables[name] if propagate_down else variables[name].detach() for name, propagate_down in zip(module.caffe_input_variable_names, module.caffe_propagate_down)]
 			outputs = module(*inputs)
-
 			if not isinstance(outputs, tuple):
 				outputs = (outputs, )
 			variables.update(dict(zip(module.caffe_output_variable_names, outputs)))
@@ -225,7 +227,7 @@ class SGDSolver(object):
 		self.optimizer, self.scheduler = None, None
 
 	def init_optimizer_scheduler(self):
-		self.optimizer = torch.optim.SGD([dict(params = [param], lr = self.optimizer_params['lr'] * mult.get('lr_mult', 1), weight_decay = self.optimizer_params['weight_decay'] * mult.get('decay_mult', 1), momentum = self.optimizer_params['momentum']) for module in self.net.children() for param, mult in zip(module.parameters(), module.caffe_optimization_params + [{}, {}])])
+		self.optimizer = torch.optim.SGD([dict(params = [param], lr = self.optimizer_params['lr'] * mult.get('lr_mult', 1), weight_decay = self.optimizer_params['weight_decay'] * mult.get('decay_mult', 1), momentum = self.optimizer_params['momentum']) for module in self.net.children() for param, mult in zip(module.parameters(), module.caffe_optimization_params + [{}, {}]) if param.requires_grad])
 		self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size = self.lr_scheduler_params['step_size'], gamma = self.lr_scheduler_params['gamma']) if self.lr_scheduler_params.get('policy') == 'step' else type('', (object, ), dict(step = lambda self: None))()
 
 	def step(self, iterations = 1, **inputs):
@@ -279,18 +281,14 @@ class Convolution(nn.Conv2d):
 
 	def forward(self, x):
 		if self.weight.numel() == 0 and self.bias.numel() == 0:
+			requires_grad = [self.weight.requires_grad, self.bias.requires_grad]
 			super(Convolution, self).__init__(x.size(1), self.out_channels, kernel_size = self.kernel_size, stride = self.stride, padding = self.padding, dilation = self.dilation)
 			convert_to_gpu_if_enabled(self)
-			init_weight_bias(self)
+			init_weight_bias(self, requires_grad = requires_grad)
 		return super(Convolution, self).forward(x)
 
 	def set_parameters(self, weight = None, bias = None):
-		if weight is not None:
-			self.weight = nn.Parameter(weight)
-			self.in_channels = self.weight.size(1)
-
-		if bias is not None:
-			self.bias = nn.Parameter(bias.view(-1))
+		init_weight_bias(self, weight = weight, bias = bias.view(-1) if bias is not None else bias)
 
 class InnerProduct(nn.Linear):
 	def __init__(self, param):
@@ -300,26 +298,28 @@ class InnerProduct(nn.Linear):
 
 	def forward(self, x):
 		if self.weight.numel() == 0 and self.bias.numel() == 0:
+			requires_grad = [self.weight.requires_grad, self.bias.requires_grad]
 			super(InnerProduct, self).__init__(x.size(1), self.out_features)
 			convert_to_gpu_if_enabled(self)
-			init_weight_bias(self)
+			init_weight_bias(self, requires_grad = requires_grad)
 		return super(InnerProduct, self).forward(x if x.size(-1) == self.in_features else x.view(len(x), -1))
 
 	def set_parameters(self, weight = None, bias = None):
-		if weight is not None:
-			self.weight = nn.Parameter(weight.view(weight.size(-2), weight.size(-1)))
-			self.in_features = self.weight.size(1)
+		init_weight_bias(self, weight = weight.view(weight.size(-2), weight.size(-1)) if weight is not None else None, bias = bias.view(-1) if bias is not None else None)
+		self.in_features = self.weight.size(1)
 
-		if bias is not None:
-			self.bias = nn.Parameter(bias.view(-1))
-
-def init_weight_bias(self):
-	for name in ['weight', 'bias']:
-		tensor, init = getattr(self, name), getattr(self, name + '_init')
+def init_weight_bias(self, weight = None, bias = None, requires_grad = []):
+	if weight is not None:
+		self.weight = nn.Parameter(weight, requires_grad = self.weight.requires_grad).type_as(self.weight)
+	if bias is not None:
+		self.bias = nn.Parameter(bias, requires_grad = self.bias.requires_grad).type_as(self.bias)
+	for name, requires_grad in zip(['weight', 'bias'], requires_grad):
+		param, init = getattr(self, name), getattr(self, name + '_init')
 		if init.get('type') == 'gaussian':
-			nn.init.normal(tensor, std = init['std'])
+			nn.init.normal(param, std = init['std'])
 		elif init.get('type') == 'constant':
-			nn.init.constant(tensor, val = init['value'])
+			nn.init.constant(param, val = init['value'])
+		param.requires_grad = requires_grad
 
 caffe_pb2 = None
 

@@ -4,6 +4,7 @@ This converter can be useful for porting Caffe code and layers to PyTorch. Featu
 * mock PyCaffe API to allow for smooth porting of Caffe-using code (drop-in script for [OICR](https://github.com/ppengtang/oicr) for changing backend in train/eval to PyTorch is below):
   * Net, Blob, SGDSolver
 * wrapping Caffe's Python layers (see the OICR example)
+* example of ROI pooling in PyTorch without manual CUDA code compilation (see the OICR example)
 
 The layer support isn't as complete as in https://github.com/marvis/pytorch-caffe. Currently it supports the following Caffe layers:
 * convolution (num_output, kernel_size, stride, pad, dilation; constant and gaussian weight/bias fillers)

@@ -296,4 +296,4 @@ class RoiPooling(torch.autograd.Function):
 caffemodel2pytorch.modules['ROIPooling'] = lambda param: lambda input, rois: RoiPooling(param['pooled_h'], param['pooled_w'], param['spatial_scale'])(input, rois)
 
 ```
-**Note:** I've also had to replace `utils/bbox.pyx` to `utils/cython_bbox.pyx` and `utils/nms.pyx` to `utils/cython_nms.pyx` in `lib/setup.py`.
+**Note:** I've also had to replace `utils/bbox.pyx` by `utils/cython_bbox.pyx` and `utils/nms.pyx` by `utils/cython_nms.pyx` in `lib/setup.py` to deal with some `setup.py` issues.

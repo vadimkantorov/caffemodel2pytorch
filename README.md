@@ -138,8 +138,6 @@ caffemodel2pytorch.modules['OICRLayer'] = lambda param: __import__('oicr_layer.l
 caffemodel2pytorch.modules['WeightedSoftmaxWithLoss'] = lambda param: WeightedSoftmaxWithLoss
 caffemodel2pytorch.modules['ReLU'] = lambda param: torch.nn.ReLU(inplace = True)
 
-#caffemodel2pytorch.modules['ROIPooling'] = lambda param: lambda input, rois: model.roi_pooling.RoiPooling(param['pooled_h'], input.size(1), param['spatial_scale'])(input, rois[:, 1:].unsqueeze(0)).view(len(rois), -1)
-
 class RoiPooling(torch.autograd.Function):
 	CUDA_NUM_THREADS = 1024
 	GET_BLOCKS = staticmethod(lambda N: (N + RoiPooling.CUDA_NUM_THREADS - 1) // RoiPooling.CUDA_NUM_THREADS)

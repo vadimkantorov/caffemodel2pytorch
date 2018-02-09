@@ -73,23 +73,6 @@ numpy_array = net.blobs['conv1_1'].data
 # access the loss weights
 loss_weights = net.blob_loss_weights
 
-# === CONFIGURING ADDITIONAL LAYERS ===
-
-# setting a path to a custom proto, http paths accepted too
-caffe.caffe_proto = 'if_needed_path_to_custom_caffe.proto'
-
-# modules dictionary will be checked when reading the prototxt (by layer type or by layer name, case invariant)
-# param is a dict representing the layer param, e.g. convolution_param for the Convolution module
-
-# register a nn.Module-derived layer
-caffe.modules['ROIPooling'] = lambda param: CustomRoiPoolingLayer(param['spatial_scale'])
-
-# register a function
-caffe.modules['GlobalSumLayer'] = lambda param: lambda input: torch.sum(input)
-
-# register a data layer
-caffe.modules['data'] = lambda param: lambda *args: torch.cuda.FloatTensor(8, 3, 512, 512)
-
 # === BASIC OPTIMIZER ===
 
 # this example uses paths from https://github.com/ppengtang/oicr
@@ -98,9 +81,6 @@ caffe.modules['data'] = lambda param: lambda *args: torch.cuda.FloatTensor(8, 3,
 # it knows about base_lr, weight_decay, momentum, lr_mult, decay_mult, iter_size, lr policy step, step_size, gamma
 # it finds train.prototxt from the solver.prototxt's train_net or net parameters
 solver = caffe.SGDSolver('oicr/models/VGG16/solver.prototxt')
-
-# access the underlying net
-solver.net
 
 # load pretrained weights
 solver.net.copy_from('oicr/data/imagenet_models/VGG16.v2.caffemodel')
@@ -130,7 +110,7 @@ def WeightedSoftmaxWithLoss(prob, labels_ic, cls_loss_weights):
 	valid_sum = cls_loss_weights.gt(1e-12).float().sum()
 	return loss.sum() / (loss.numel() if valid_sum == 0 else valid_sum)
 
-caffemodel2pytorch.caffe_proto = './caffe-oicr/src/caffe/proto/caffe.proto'
+caffemodel2pytorch.initialize('./caffe-oicr/src/caffe/proto/caffe.proto')
 caffemodel2pytorch.set_mode_gpu()
 caffemodel2pytorch.modules['GlobalSumPooling'] = lambda param: lambda pred: pred.sum(dim = 0, keepdim = True)
 caffemodel2pytorch.modules['MulticlassCrossEntropyLoss'] = lambda param: lambda pred, labels: F.binary_cross_entropy(pred.clamp(1e-6, 1 - 1e-6), labels)
@@ -317,5 +297,6 @@ class RoiPooling(torch.autograd.Function):
 		return grad_input, None
 
 caffemodel2pytorch.modules['ROIPooling'] = lambda param: lambda input, rois: RoiPooling(param['pooled_h'], param['pooled_w'], param['spatial_scale'])(input, rois)
+
 ```
 **Note:** I've also had to replace `utils/bbox.pyx` to `utils/cython_bbox.pyx` and `utils/nms.pyx` to `utils/cython_nms.pyx` in `lib/setup.py`.

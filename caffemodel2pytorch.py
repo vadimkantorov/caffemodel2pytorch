@@ -19,8 +19,6 @@ import google.protobuf.symbol_database
 import google.protobuf.text_format
 from google.protobuf.descriptor import FieldDescriptor as FD
 
-caffe_proto = 'https://raw.githubusercontent.com/BVLC/caffe/master/src/caffe/proto/caffe.proto'
-
 TRAIN = 0
 
 TEST = 1
@@ -216,7 +214,7 @@ class Layer(torch.autograd.Function):
 			
 class SGDSolver(object):
 	def __init__(self, solver_prototxt):
-		solver_param = initialize(caffe_proto).SolverParameter()
+		solver_param = initialize().SolverParameter()
 		google.protobuf.text_format.Parse(open(solver_prototxt).read(), solver_param)
 		solver_param = to_dict(solver_param)
 		self.net = Net(solver_param.get('train_net') or solver_param.get('net'), phase = TRAIN)
@@ -324,10 +322,10 @@ def init_weight_bias(self):
 
 caffe_pb2 = None
 
-def initialize(caffe_proto_override = None, codegen_dir = tempfile.mkdtemp()):
+def initialize(caffe_proto = 'https://raw.githubusercontent.com/BVLC/caffe/master/src/caffe/proto/caffe.proto', codegen_dir = tempfile.mkdtemp()):
 	global caffe_pb2
 	if caffe_pb2 is None:
-		local_caffe_proto = os.path.join(codegen_dir, os.path.basename(caffe_proto_override or caffe_proto))
+		local_caffe_proto = os.path.join(codegen_dir, os.path.basename(caffe_proto))
 		with open(local_caffe_proto, 'w') as f:
 			f.write((urlopen if 'http' in caffe_proto else open)(caffe_proto).read())
 		subprocess.check_call(['protoc', '--proto_path', os.path.dirname(local_caffe_proto), '--python_out', codegen_dir, local_caffe_proto])
@@ -341,6 +339,7 @@ def initialize(caffe_proto_override = None, codegen_dir = tempfile.mkdtemp()):
 		google.protobuf.symbol_database._DEFAULT = old_symdb
 		sys.modules[__name__ + '.proto'] = sys.modules[__name__]
 		sys.modules['caffe'] = sys.modules[__name__]
+		sys.modules['caffe.proto'] = sys.modules[__name__]
 	return caffe_pb2
 
 def convert_to_gpu_if_enabled(obj):

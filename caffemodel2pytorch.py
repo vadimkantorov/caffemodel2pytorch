@@ -268,8 +268,8 @@ modules = dict(
 	InnerProduct = lambda param: InnerProduct(param),
 	Pooling = lambda param: [nn.MaxPool2d, nn.AvgPool2d][param['pool']](kernel_size = first_or(param, 'kernel_size', 1), stride = first_or(param, 'stride', 1), padding = first_or(param, 'pad', 0)),
 	Softmax = lambda param: nn.Softmax(dim = param.get('axis', -1)),
-	ReLU = lambda param: nn.ReLU(inplace = param['inplace']),
-	Dropout = lambda param: nn.Dropout(p = param['dropout_ratio'], inplace = param['inplace']),
+	ReLU = lambda param: nn.ReLU(),
+	Dropout = lambda param: nn.Dropout(p = param['dropout_ratio']),
 	Eltwise = lambda param: [torch.mul, torch.add, torch.max][param['operation']]
 )
 

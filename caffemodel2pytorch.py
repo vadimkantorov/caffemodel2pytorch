@@ -231,6 +231,7 @@ class SGDSolver(object):
 	def step(self, iterations = 1, **inputs):
 		loss_total = 0.0
 		for i in range(iterations):
+			tic = time.time()
 			if self.optimizer is not None:
 				self.optimizer.zero_grad()
 			
@@ -256,7 +257,7 @@ class SGDSolver(object):
 			print('{}] Iteration {}, loss: {}'.format(log_prefix, self.iter, loss_batch))
 			for i, (name, loss) in enumerate(sorted(losses_batch.items())):
 				print('{}]     Train net output #{}: {} = {} (* {} = {} loss)'.format(log_prefix, i, name, loss, self.net.blob_loss_weights[name], self.net.blob_loss_weights[name] * loss))
-			print('{}] Iteration {}, lr = {}'.format(log_prefix, self.iter, self.optimizer_params['lr']))
+			print('{}] Iteration {}, lr = {}, time = {}'.format(log_prefix, self.iter, self.optimizer_params['lr'], time.time() - tic))
 				
 		return loss_total
 

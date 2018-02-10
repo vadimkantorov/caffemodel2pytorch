@@ -17,6 +17,8 @@ The layer support isn't as complete as in https://github.com/marvis/pytorch-caff
 
 PRs to enable other layers or layer params are very welcome (see the definition of the `modules` dictionary in the code)!
 
+License is MIT.
+
 ## Run Caffe models using PyTorch as backend
 ```python
 import torch

@@ -310,9 +310,9 @@ class InnerProduct(nn.Linear):
 
 def init_weight_bias(self, weight = None, bias = None, requires_grad = []):
 	if weight is not None:
-		self.weight = nn.Parameter(weight, requires_grad = self.weight.requires_grad).type_as(self.weight)
+		self.weight = nn.Parameter(weight.type_as(self.weight), requires_grad = self.weight.requires_grad)
 	if bias is not None:
-		self.bias = nn.Parameter(bias, requires_grad = self.bias.requires_grad).type_as(self.bias)
+		self.bias = nn.Parameter(bias.type_as(self.bias), requires_grad = self.bias.requires_grad)
 	for name, requires_grad in zip(['weight', 'bias'], requires_grad):
 		param, init = getattr(self, name), getattr(self, name + '_init')
 		if init.get('type') == 'gaussian':

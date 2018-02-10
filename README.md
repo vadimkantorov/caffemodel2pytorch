@@ -127,7 +127,7 @@ class RoiPooling(torch.autograd.Function):
 	#define CUDA_KERNEL_LOOP(i, n) for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < (n); i += blockDim.x * gridDim.x)
 	extern "C"
 	__global__ void ROIPoolForward(const int nthreads, const Dtype* bottom_data,
-		const double spatial_scale, const int channels, const int height,
+		const Dtype spatial_scale, const int channels, const int height,
 		const int width, const int pooled_height, const int pooled_width,
 		const Dtype* bottom_rois, Dtype* top_data, int* argmax_data) {
 	  CUDA_KERNEL_LOOP(index, nthreads) { 
@@ -193,7 +193,7 @@ class RoiPooling(torch.autograd.Function):
 	#define CUDA_KERNEL_LOOP(i, n) for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < (n); i += blockDim.x * gridDim.x)
 	extern "C"
 	__global__ void ROIPoolBackward(const int nthreads, const Dtype* top_diff,
-		const int* argmax_data, const int num_rois, const double spatial_scale,
+		const int* argmax_data, const int num_rois, const Dtype spatial_scale,
 		const int channels, const int height, const int width,
 		const int pooled_height, const int pooled_width, Dtype* bottom_diff,
 		const Dtype* bottom_rois) {
@@ -279,7 +279,7 @@ class RoiPooling(torch.autograd.Function):
 		self.input_size = images.size()
 		self.save_for_backward(rois)
 		RoiPooling.compiled_forward(grid = (RoiPooling.GET_BLOCKS(output.numel()), 1, 1), block = (RoiPooling.CUDA_NUM_THREADS, 1, 1), args=[
-			output.numel(), images.data_ptr(), self.spatial_scale, self.input_size[-3], self.input_size[-2], self.input_size[-1],
+			output.numel(), images.data_ptr(), cupy.float32(self.spatial_scale), self.input_size[-3], self.input_size[-2], self.input_size[-1],
 			self.pooled_height, self.pooled_width, rois.data_ptr(), output.data_ptr(), self.argmax.data_ptr()
 			  ], stream=RoiPooling.Stream(ptr=torch.cuda.current_stream().cuda_stream))
 		return output
@@ -288,7 +288,7 @@ class RoiPooling(torch.autograd.Function):
 		rois, = self.saved_tensors
 		grad_input = torch.cuda.FloatTensor(*self.input_size).zero_()
 		RoiPooling.compiled_backward(grid = (RoiPooling.GET_BLOCKS(grad_input.numel()), 1, 1), block = (RoiPooling.CUDA_NUM_THREADS, 1, 1), args=[
-			grad_input.numel(), grad_output.data_ptr(), self.argmax.data_ptr(), len(rois), self.spatial_scale, self.input_size[-3],
+			grad_input.numel(), grad_output.data_ptr(), self.argmax.data_ptr(), len(rois), cupy.float32(self.spatial_scale), self.input_size[-3],
 			self.input_size[-2], self.input_size[-1], self.pooled_height, self.pooled_width, grad_input.data_ptr(), rois.data_ptr()
 			  ], stream=RoiPooling.Stream(ptr=torch.cuda.current_stream().cuda_stream))
 		return grad_input, None
@@ -296,4 +296,4 @@ class RoiPooling(torch.autograd.Function):
 caffemodel2pytorch.modules['ROIPooling'] = lambda param: lambda input, rois: RoiPooling(param['pooled_h'], param['pooled_w'], param['spatial_scale'])(input, rois)
 
 ```
-**Note:** I've also had to replace `utils/bbox.pyx` to `utils/cython_bbox.pyx` and `utils/nms.pyx` to `utils/cython_nms.pyx` in `lib/setup.py`.
+**Note:** I've also had to replace `utils/bbox.pyx` by `utils/cython_bbox.pyx` and `utils/nms.pyx` by `utils/cython_nms.pyx` in `lib/setup.py` to deal with some `setup.py` issues.

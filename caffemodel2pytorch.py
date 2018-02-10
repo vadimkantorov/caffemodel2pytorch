@@ -90,10 +90,10 @@ class Net(nn.Module):
 	def forward(self, data = None, **variables):
 		if data is not None:
 			variables['data'] = data
-		numpy = not all([isinstance(v, torch.autograd.Variable) for v in variables.values()])
+		numpy = not all(isinstance(v, torch.autograd.Variable) for v in variables.values())
 		variables = {k : convert_to_gpu_if_enabled(torch.autograd.Variable(torch.from_numpy(v.copy())) if numpy else v) for k, v in variables.items()}
 
-		for module in [module for module in self.children() if not all([name in variables for name in module.caffe_output_variable_names])]:
+		for module in [module for module in self.children() if not all(name in variables for name in module.caffe_output_variable_names)]:
 			for name in module.caffe_input_variable_names:
 				assert name in variables, 'Variable [{}] does not exist. Pass it as a keyword argument or provide a layer which produces it.'.format(name)
 			inputs = [variables[name] if propagate_down else variables[name].detach() for name, propagate_down in zip(module.caffe_input_variable_names, module.caffe_propagate_down)]

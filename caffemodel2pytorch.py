@@ -323,7 +323,7 @@ def init_weight_bias(self, weight = None, bias = None, requires_grad = []):
 
 caffe_pb2 = None
 
-def initialize(caffe_proto = 'https://raw.githubusercontent.com/BVLC/caffe/master/src/caffe/proto/caffe.proto', codegen_dir = tempfile.mkdtemp()):
+def initialize(caffe_proto = 'https://raw.githubusercontent.com/BVLC/caffe/master/src/caffe/proto/caffe.proto', codegen_dir = tempfile.mkdtemp(), shadow_caffe = True):
 	global caffe_pb2
 	if caffe_pb2 is None:
 		local_caffe_proto = os.path.join(codegen_dir, os.path.basename(caffe_proto))
@@ -339,8 +339,9 @@ def initialize(caffe_proto = 'https://raw.githubusercontent.com/BVLC/caffe/maste
 		google.protobuf.descriptor._message.default_pool = old_pool
 		google.protobuf.symbol_database._DEFAULT = old_symdb
 		sys.modules[__name__ + '.proto'] = sys.modules[__name__]
-		sys.modules['caffe'] = sys.modules[__name__]
-		sys.modules['caffe.proto'] = sys.modules[__name__]
+		if shadow_caffe:
+			sys.modules['caffe'] = sys.modules[__name__]
+			sys.modules['caffe.proto'] = sys.modules[__name__]
 	return caffe_pb2
 
 def convert_to_gpu_if_enabled(obj):

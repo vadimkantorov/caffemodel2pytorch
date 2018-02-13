@@ -15,6 +15,8 @@ The layer support isn't as complete as in https://github.com/marvis/pytorch-caff
 * eltwise (prod, sum, max)
 * softmax (axis)
 
+Dependencies: protobuf with Python bindings, including `protoc` binary in `PATH`.
+
 PRs to enable other layers or layer params are very welcome (see the definition of the `modules` dictionary in the code)!
 
 License is MIT.

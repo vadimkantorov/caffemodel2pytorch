@@ -104,19 +104,34 @@ import torch.nn.functional as F
 import cupy
 import caffemodel2pytorch
 
+caffemodel2pytorch.initialize('./caffe-oicr/src/caffe/proto/caffe.proto') # needs to be called explicitly for these porting scenarios to enable caffe.proto.caffe_pb2 variable
+caffemodel2pytorch.set_mode_gpu()
+caffemodel2pytorch.modules['GlobalSumPooling'] = lambda param: lambda pred: pred.sum(dim = 0, keepdim = True)
+caffemodel2pytorch.modules['MulticlassCrossEntropyLoss'] = lambda param: lambda pred, labels: F.binary_cross_entropy(pred.clamp(1e-6, 1 - 1e-6), labels)
+caffemodel2pytorch.modules['data'] = lambda param: __import__('roi_data_layer.layer').layer.RoIDataLayer() # wrapping a PyCaffe layer
+caffemodel2pytorch.modules['OICRLayer'] = lambda param: OICRLayer
+caffemodel2pytorch.modules['WeightedSoftmaxWithLoss'] = lambda param: WeightedSoftmaxWithLoss
+caffemodel2pytorch.modules['ReLU'] = lambda param: torch.nn.ReLU(inplace = True)
+caffemodel2pytorch.modules['ROIPooling'] = lambda param: lambda input, rois: RoiPooling(param['pooled_h'], param['pooled_w'], param['spatial_scale'])(input, rois)
+
 def WeightedSoftmaxWithLoss(prob, labels_ic, cls_loss_weights):
 	loss = -cls_loss_weights * F.log_softmax(prob, dim = -1).gather(-1, labels_ic.long().unsqueeze(-1)).squeeze(-1)
 	valid_sum = cls_loss_weights.gt(1e-12).float().sum()
 	return loss.sum() / (loss.numel() if valid_sum == 0 else valid_sum)
 
-caffemodel2pytorch.initialize('./caffe-oicr/src/caffe/proto/caffe.proto') # needs to be called explicitly for these porting scenarios to enable caffe.proto.caffe_pb2 variable
-caffemodel2pytorch.set_mode_gpu()
-caffemodel2pytorch.modules['GlobalSumPooling'] = lambda param: lambda pred: pred.sum(dim = 0, keepdim = True)
-caffemodel2pytorch.modules['MulticlassCrossEntropyLoss'] = lambda param: lambda pred, labels: F.binary_cross_entropy(pred.clamp(1e-6, 1 - 1e-6), labels)
-caffemodel2pytorch.modules['data'] = lambda param: __import__('roi_data_layer.layer').layer.RoIDataLayer()
-caffemodel2pytorch.modules['OICRLayer'] = lambda param: __import__('oicr_layer.layer').layer.OICRLayer()
-caffemodel2pytorch.modules['WeightedSoftmaxWithLoss'] = lambda param: WeightedSoftmaxWithLoss
-caffemodel2pytorch.modules['ReLU'] = lambda param: torch.nn.ReLU(inplace = True)
+def OICRLayer(boxes, cls_prob, im_labels, cfg_TRAIN_FG_THRESH = 0.5):
+    cls_prob = (cls_prob if cls_prob.size(-1) == im_labels.size(-1) else cls_prob[..., 1:]).clone()
+    boxes = boxes[..., 1:]
+    gt_boxes, gt_classes, gt_scores = [], [], []
+    for i in range(im_labels.shape[-1]):
+        if im_labels[0, i] == 1:
+            max_index = int(cls_prob[:, i].max(dim = 0)[1])
+            gt_boxes.append(boxes[max_index])
+            gt_classes.append(i + 1)
+            gt_scores.append(float(cls_prob[max_index, i]))
+            cls_prob[max_index] = 0
+    max_overlaps, gt_assignment = overlap(boxes, torch.stack(gt_boxes)).max(dim = 1)
+    return gt_assignment.new(gt_classes)[gt_assignment] * (max_overlaps > cfg_TRAIN_FG_THRESH).type_as(gt_assignment), max_overlaps.new(gt_scores)[gt_assignment]
 
 class RoiPooling(torch.autograd.Function):
 	CUDA_NUM_THREADS = 1024
@@ -294,8 +309,17 @@ class RoiPooling(torch.autograd.Function):
 			self.input_size[-2], self.input_size[-1], self.pooled_height, self.pooled_width, grad_input.data_ptr(), rois.data_ptr()
 			  ], stream=RoiPooling.Stream(ptr=torch.cuda.current_stream().cuda_stream))
 		return grad_input, None
+		
+def overlap(box1, box2):
+    b1, b2 = box1.t().contiguous(), box2.t().contiguous()
+    xx1 = torch.max(b1[0].unsqueeze(1), b2[0].unsqueeze(0))
+    yy1 = torch.max(b1[1].unsqueeze(1), b2[1].unsqueeze(0))
+    xx2 = torch.min(b1[2].unsqueeze(1), b2[2].unsqueeze(0))
+    yy2 = torch.min(b1[3].unsqueeze(1), b2[3].unsqueeze(0))
+    inter = area(x1 = xx1, y1 = yy1, x2 = xx2, y2 = yy2)
+    return inter / (area(b1.t()).unsqueeze(1) + area(b2.t()).unsqueeze(0) - inter)
 
-caffemodel2pytorch.modules['ROIPooling'] = lambda param: lambda input, rois: RoiPooling(param['pooled_h'], param['pooled_w'], param['spatial_scale'])(input, rois)
-
+def area(boxes = None, x1 = None, y1 = None, x2 = None, y2 = None):
+    return (boxes[..., 3] - boxes[..., 1] + 1) * (boxes[..., 2] - boxes[..., 0] + 1) if boxes is not None else (x2 - x1 + 1).clamp(min = 0) * (y2 - y1 + 1).clamp(min = 0)
 ```
 **Note:** I've also had to replace `utils/bbox.pyx` by `utils/cython_bbox.pyx` and `utils/nms.pyx` by `utils/cython_nms.pyx` in `lib/setup.py` to deal with some `setup.py` issues.

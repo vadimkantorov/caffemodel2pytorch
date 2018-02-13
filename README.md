@@ -109,10 +109,10 @@ caffemodel2pytorch.set_mode_gpu()
 caffemodel2pytorch.modules['GlobalSumPooling'] = lambda param: lambda pred: pred.sum(dim = 0, keepdim = True)
 caffemodel2pytorch.modules['MulticlassCrossEntropyLoss'] = lambda param: lambda pred, labels: F.binary_cross_entropy(pred.clamp(1e-6, 1 - 1e-6), labels)
 caffemodel2pytorch.modules['data'] = lambda param: __import__('roi_data_layer.layer').layer.RoIDataLayer() # wrapping a PyCaffe layer
-caffemodel2pytorch.modules['OICRLayer'] = lambda param: OICRLayer
+caffemodel2pytorch.modules['OICRLayer'] = lambda param: OICRLayer # wrapping a PyTorch function
 caffemodel2pytorch.modules['WeightedSoftmaxWithLoss'] = lambda param: WeightedSoftmaxWithLoss
-caffemodel2pytorch.modules['ReLU'] = lambda param: torch.nn.ReLU(inplace = True)
-caffemodel2pytorch.modules['ROIPooling'] = lambda param: lambda input, rois: RoiPooling(param['pooled_h'], param['pooled_w'], param['spatial_scale'])(input, rois)
+caffemodel2pytorch.modules['ReLU'] = lambda param: torch.nn.ReLU(inplace = True) # wrapping a PyTorch module
+caffemodel2pytorch.modules['ROIPooling'] = lambda param: lambda input, rois: RoiPooling(param['pooled_h'], param['pooled_w'], param['spatial_scale'])(input, rois) # wrapping a PyTorch autograd function
 
 def WeightedSoftmaxWithLoss(prob, labels_ic, cls_loss_weights):
 	loss = -cls_loss_weights * F.log_softmax(prob, dim = -1).gather(-1, labels_ic.long().unsqueeze(-1)).squeeze(-1)

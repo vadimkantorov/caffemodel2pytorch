@@ -125,13 +125,12 @@ def OICRLayer(boxes, cls_prob, im_labels, cfg_TRAIN_FG_THRESH = 0.5):
     cls_prob = (cls_prob if cls_prob.size(-1) == im_labels.size(-1) else cls_prob[..., 1:]).clone()
     boxes = boxes[..., 1:]
     gt_boxes, gt_classes, gt_scores = [], [], []
-    for i in range(im_labels.shape[-1]):
-        if im_labels[0, i] == 1:
-            max_index = int(cls_prob[:, i].max(dim = 0)[1])
-            gt_boxes.append(boxes[max_index])
-            gt_classes.append(i + 1)
-            gt_scores.append(float(cls_prob[max_index, i]))
-            cls_prob[max_index] = 0
+    for i in im_labels.eq(1).nonzero()[:, 1]:
+        max_index = int(cls_prob[:, i].max(dim = 0)[1])
+        gt_boxes.append(boxes[max_index])
+        gt_classes.append(int(i) + 1)
+        gt_scores.append(float(cls_prob[max_index, i]))
+        cls_prob[max_index] = 0
     max_overlaps, gt_assignment = overlap(boxes, torch.stack(gt_boxes)).max(dim = 1)
     return gt_assignment.new(gt_classes)[gt_assignment] * (max_overlaps > cfg_TRAIN_FG_THRESH).type_as(gt_assignment), max_overlaps.new(gt_scores)[gt_assignment]
 

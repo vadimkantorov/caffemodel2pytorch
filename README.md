@@ -116,9 +116,9 @@ caffemodel2pytorch.modules['WeightedSoftmaxWithLoss'] = lambda param: WeightedSo
 caffemodel2pytorch.modules['ReLU'] = lambda param: torch.nn.ReLU(inplace = True) # wrapping a PyTorch module
 caffemodel2pytorch.modules['ROIPooling'] = lambda param: lambda input, rois: RoiPooling(param['pooled_h'], param['pooled_w'], param['spatial_scale'])(input, rois) # wrapping a PyTorch autograd function
 
-def WeightedSoftmaxWithLoss(prob, labels_ic, cls_loss_weights):
+def WeightedSoftmaxWithLoss(prob, labels_ic, cls_loss_weights, eps = 1e-12):
 	loss = -cls_loss_weights * F.log_softmax(prob, dim = -1).gather(-1, labels_ic.long().unsqueeze(-1)).squeeze(-1)
-	valid_sum = cls_loss_weights.gt(1e-12).float().sum()
+	valid_sum = cls_loss_weights.gt(eps).float().sum()
 	return loss.sum() / (loss.numel() if valid_sum == 0 else valid_sum)
 
 def OICRLayer(boxes, cls_prob, im_labels, cfg_TRAIN_FG_THRESH = 0.5):

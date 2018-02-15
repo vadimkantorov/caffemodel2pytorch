@@ -1,8 +1,9 @@
 import os
 import sys
 import time
-import subprocess
+import argparse
 import tempfile
+import subprocess
 import collections
 import torch
 import torch.nn as nn
@@ -353,3 +354,27 @@ def first_or(param, key, default):
 def to_dict(obj):
 	return list(map(to_dict, obj)) if isinstance(obj, collections.Iterable) else {} if obj is None else {f.name : converter(v) if f.label != FD.LABEL_REPEATED else list(map(converter, v)) for f, v in obj.ListFields() for converter in [{FD.TYPE_DOUBLE: float, FD.TYPE_SFIXED32: float, FD.TYPE_SFIXED64: float, FD.TYPE_SINT32: int, FD.TYPE_SINT64: long, FD.TYPE_FLOAT: float, FD.TYPE_ENUM: int, FD.TYPE_UINT32: int, FD.TYPE_INT64: long, FD.TYPE_UINT64: long, FD.TYPE_INT32: int, FD.TYPE_FIXED64: float, FD.TYPE_FIXED32: float, FD.TYPE_BOOL: bool, FD.TYPE_STRING: unicode, FD.TYPE_BYTES: lambda x: x.encode('string_escape'), FD.TYPE_MESSAGE: to_dict}[f.type]]}
 
+if __name__ == '__main__':
+	parser = argparse.ArgumentParser()
+	parser.add_argument(metavar = 'model.caffemodel', dest = 'model_caffemodel', help = 'Path to model.caffemodel')
+	parser.add_argument('output_path', help = 'Path to converted model, supported file extensions are: h5, npy, npz, json, pth')
+	parser.add_argument(metavar = '--caffe.proto', dest = 'caffe_proto', help = 'Path to caffe.proto (typically located at CAFFE_ROOT/src/caffe/proto/caffe.proto)', default = 'https://raw.githubusercontent.com/BVLC/caffe/master/src/caffe/proto/caffe.proto')
+	args = parse.parse_args()
+
+	net_param = initialize(args.caffe_proto).NetParameter()
+	net_param.ParseFromString(open(weights).read())
+	blobs = {layer.name + '.' + name : dict(data = blob.data, shape = list(blob.shape.dim) if len(blob.shape.dim) > 0 else [blob.num, blob.channels, blob.height, blob.width]) for layer in list(net_param.layer) + list(net_param.layers) for name, blob in zip(['weight', 'bias'], layer.blobs)}
+
+	if args.output_path.endswith('.json'):
+		import json
+		with open(args.output_path, 'w') as f:
+			json.dump(blobs, f)
+	elif args.output_path.endswith('.h5'):
+		import h5py, numpy
+		with h5py.File(args.output_path, 'w') as h:
+			h.update(**{k : numpy.array(blob.data, dtype = numpy.float32).reshape(*blob.shape)})
+	elif args.output_path.endswith('.npy') or args.output_path.endswith('.npz'):
+		import numpy
+		(numpy.savez if args.output_path[-1] == 'z' else numpy.save)(args.output_path, **{k : numpy.array(blob.data, dtype = numpy.float32).reshape(*blob.shape)})
+	elif args.output_path.endswith('.pth'):
+		torch.save({k : torch.FloatTensor(blob.data).view(*blob.shape)}, args.output_path)

@@ -1,5 +1,6 @@
 ## Description
 This converter can be useful for porting Caffe code and layers to PyTorch. Features:
+* dump caffemodel weights to hdf5, npy, pth and json formats
 * load Caffe models and use them from PyTorch
 * mock PyCaffe API to allow for smooth porting of Caffe-using code (drop-in script for [OICR](https://github.com/ppengtang/oicr) for changing backend in train/eval to PyTorch is below):
   * Net, Blob, SGDSolver
@@ -20,6 +21,13 @@ Dependencies: protobuf with Python bindings, including `protoc` binary in `PATH`
 PRs to enable other layers or layer params are very welcome (see the definition of the `modules` dictionary in the code)!
 
 License is MIT.
+
+## Dump weights to HDF5 or PTH
+```shell
+python -m caffemodel2pytorch VGG_ILSVRC_16_layers.caffemodel VGG_ILSVRC_16_layers.caffemodel.h5
+
+python -m caffemodel2pytorch VGG_ILSVRC_16_layers.caffemodel VGG_ILSVRC_16_layers.caffemodel.pth
+```
 
 ## Run Caffe models using PyTorch as backend
 ```python

@@ -109,7 +109,7 @@ import caffemodel2pytorch
 caffemodel2pytorch.initialize('./caffe-oicr/src/caffe/proto/caffe.proto') # needs to be called explicitly for these porting scenarios to enable caffe.proto.caffe_pb2 variable
 caffemodel2pytorch.set_mode_gpu()
 caffemodel2pytorch.modules['GlobalSumPooling'] = lambda param: lambda pred: pred.sum(dim = 0, keepdim = True)
-caffemodel2pytorch.modules['MulticlassCrossEntropyLoss'] = lambda param: lambda pred, labels: F.binary_cross_entropy(pred.clamp(1e-6, 1 - 1e-6), labels)
+caffemodel2pytorch.modules['MulticlassCrossEntropyLoss'] = lambda param: lambda pred, labels, eps = 1e-6: F.binary_cross_entropy(pred.clamp(eps, 1 - eps), labels)
 caffemodel2pytorch.modules['data'] = lambda param: __import__('roi_data_layer.layer').layer.RoIDataLayer() # wrapping a PyCaffe layer
 caffemodel2pytorch.modules['OICRLayer'] = lambda param: OICRLayer # wrapping a PyTorch function
 caffemodel2pytorch.modules['WeightedSoftmaxWithLoss'] = lambda param: WeightedSoftmaxWithLoss

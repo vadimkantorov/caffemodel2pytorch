@@ -22,11 +22,13 @@ PRs to enable other layers or layer params are very welcome (see the definition 
 
 License is MIT.
 
-## Dump weights to HDF5 or PTH
+## Dump weights to PTH or HDF5
 ```shell
-python -m caffemodel2pytorch VGG_ILSVRC_16_layers.caffemodel VGG_ILSVRC_16_layers.caffemodel.h5
+# dumps to PTH by default to VGG_ILSVRC_16_layers.caffemodel.pth
+python -m caffemodel2pytorch VGG_ILSVRC_16_layers.caffemodel
 
-python -m caffemodel2pytorch VGG_ILSVRC_16_layers.caffemodel VGG_ILSVRC_16_layers.caffemodel.pth
+# dumps to HDF5 converted.h5
+python -m caffemodel2pytorch VGG_ILSVRC_16_layers.caffemodel -o converted.h5
 ```
 
 ## Run Caffe models using PyTorch as backend

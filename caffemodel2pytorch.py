@@ -24,6 +24,29 @@ TRAIN = 0
 
 TEST = 1
 
+caffe_pb2 = None
+
+def initialize(caffe_proto = 'https://raw.githubusercontent.com/BVLC/caffe/master/src/caffe/proto/caffe.proto', codegen_dir = tempfile.mkdtemp(), shadow_caffe = True):
+	global caffe_pb2
+	if caffe_pb2 is None:
+		local_caffe_proto = os.path.join(codegen_dir, os.path.basename(caffe_proto))
+		with open(local_caffe_proto, 'w') as f:
+			f.write((urlopen if 'http' in caffe_proto else open)(caffe_proto).read())
+		subprocess.check_call(['protoc', '--proto_path', os.path.dirname(local_caffe_proto), '--python_out', codegen_dir, local_caffe_proto])
+		sys.path.insert(0, codegen_dir)
+		old_pool = google.protobuf.descriptor._message.default_pool
+		old_symdb = google.protobuf.symbol_database._DEFAULT
+		google.protobuf.descriptor._message.default_pool = google.protobuf.descriptor_pool.DescriptorPool()
+		google.protobuf.symbol_database._DEFAULT = google.protobuf.symbol_database.SymbolDatabase(pool = google.protobuf.descriptor._message.default_pool)
+		import caffe_pb2 as caffe_pb2
+		google.protobuf.descriptor._message.default_pool = old_pool
+		google.protobuf.symbol_database._DEFAULT = old_symdb
+		sys.modules[__name__ + '.proto'] = sys.modules[__name__]
+		if shadow_caffe:
+			sys.modules['caffe'] = sys.modules[__name__]
+			sys.modules['caffe.proto'] = sys.modules[__name__]
+	return caffe_pb2
+
 def set_mode_gpu():
 	global convert_to_gpu_if_enabled
 	convert_to_gpu_if_enabled = lambda obj: obj.cuda()
@@ -44,13 +67,6 @@ class Net(nn.Module):
 		self.net_param = initialize(caffe_proto).NetParameter()
 		google.protobuf.text_format.Parse(open(prototxt).read(), self.net_param)
 
-		def wrap_function(layer_name, forward):
-			return type('caffe_' + str(layer_name), (nn.Module, ), dict(forward = lambda self, *inputs: forward(*inputs)))()
-
-		def wrap_caffe_python_layer(layer_name, caffe_python_layer, caffe_input_variable_names, caffe_output_variable_names, param_str):
-			caffe_python_layer.param_str = param_str
-			return type('caffe_' + str(layer_name), (nn.Module, ), dict(forward = lambda self, *inputs: Layer(caffe_python_layer, caffe_input_variable_names, caffe_output_variable_names)(*inputs), __getattr__ = lambda self, name: nn.Module.__getattr__(self, name) if name in dir(self) else getattr(caffe_python_layer, name)))()
-
 		for layer in list(self.net_param.layer) + list(self.net_param.layers):
 			layer_type = layer.type if layer.type != 'Python' else layer.python_param.layer
 			if isinstance(layer_type, int):
@@ -65,7 +81,7 @@ class Net(nn.Module):
 				caffe_optimization_params = to_dict(layer.param)
 				param['inplace'] = len(caffe_input_variable_names) == 1 and caffe_input_variable_names == caffe_output_variable_names
 				module = module_constructor(param)
-				self.add_module(layer.name, module if isinstance(module, nn.Module) else wrap_caffe_python_layer(layer.name, module, caffe_input_variable_names, caffe_output_variable_names, param.get('param_str', '')) if type(module).__name__.endswith('Layer') else wrap_function(layer.name, module))
+				self.add_module(layer.name, module if isinstance(module, nn.Module) else CaffePythonLayerModule(module, caffe_input_variable_names, caffe_output_variable_names, param.get('param_str', '')) if type(module).__name__.endswith('Layer') else FunctionModule(module))
 				module = getattr(self, layer.name)
 				module.caffe_layer_name = layer.name
 				module.caffe_layer_type = layer_type
@@ -274,6 +290,28 @@ modules = dict(
 	Eltwise = lambda param: [torch.mul, torch.add, torch.max][param['operation']]
 )
 
+class FunctionModule(nn.Module):
+	def __init__(self, forward):
+		super(FunctionModule, self).__init__()
+		self.forward_func = forward
+
+	def forward(self, *inputs):
+		return self.forward_func(*inputs)
+
+class CaffePythonLayerModule(nn.Module):
+	def __init__(self, caffe_python_layer, caffe_input_variable_names, caffe_output_variable_names, param_str):
+		super(CaffePythonLayerModule, self).__init__()
+		caffe_python_layer.param_str = param_str
+		self.caffe_python_layer = caffe_python_layer
+		self.caffe_input_variable_names = caffe_input_variable_names
+		self.caffe_output_variable_names = caffe_output_variable_names
+
+	def forward(self, *inputs):
+		return Layer(self.caffe_python_layer, self.caffe_input_variable_names, self.caffe_output_variable_names)(*inputs)
+
+	def __getattr__(self, name):
+		return nn.Module.__getattr__(self, name) if name in dir(self) else getattr(self.caffe_python_layer, name)
+
 class Convolution(nn.Conv2d):
 	def __init__(self, param):
 		super(Convolution, self).__init__(1, param['num_output'], kernel_size = first_or(param, 'kernel_size', 1), stride = first_or(param, 'stride', 1), padding = first_or(param, 'pad', 0), dilation = first_or(param, 'dilation', 1))
@@ -321,29 +359,6 @@ def init_weight_bias(self, weight = None, bias = None, requires_grad = []):
 		elif init.get('type') == 'constant':
 			nn.init.constant(param, val = init['value'])
 		param.requires_grad = requires_grad
-
-caffe_pb2 = None
-
-def initialize(caffe_proto = 'https://raw.githubusercontent.com/BVLC/caffe/master/src/caffe/proto/caffe.proto', codegen_dir = tempfile.mkdtemp(), shadow_caffe = True):
-	global caffe_pb2
-	if caffe_pb2 is None:
-		local_caffe_proto = os.path.join(codegen_dir, os.path.basename(caffe_proto))
-		with open(local_caffe_proto, 'w') as f:
-			f.write((urlopen if 'http' in caffe_proto else open)(caffe_proto).read())
-		subprocess.check_call(['protoc', '--proto_path', os.path.dirname(local_caffe_proto), '--python_out', codegen_dir, local_caffe_proto])
-		sys.path.insert(0, codegen_dir)
-		old_pool = google.protobuf.descriptor._message.default_pool
-		old_symdb = google.protobuf.symbol_database._DEFAULT
-		google.protobuf.descriptor._message.default_pool = google.protobuf.descriptor_pool.DescriptorPool()
-		google.protobuf.symbol_database._DEFAULT = google.protobuf.symbol_database.SymbolDatabase(pool = google.protobuf.descriptor._message.default_pool)
-		import caffe_pb2 as caffe_pb2
-		google.protobuf.descriptor._message.default_pool = old_pool
-		google.protobuf.symbol_database._DEFAULT = old_symdb
-		sys.modules[__name__ + '.proto'] = sys.modules[__name__]
-		if shadow_caffe:
-			sys.modules['caffe'] = sys.modules[__name__]
-			sys.modules['caffe.proto'] = sys.modules[__name__]
-	return caffe_pb2
 
 def convert_to_gpu_if_enabled(obj):
 	return obj

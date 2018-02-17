@@ -328,6 +328,7 @@ class Convolution(nn.Conv2d):
 
 	def set_parameters(self, weight = None, bias = None):
 		init_weight_bias(self, weight = weight, bias = bias.view(-1) if bias is not None else bias)
+		self.in_channels = self.weight.size(1)
 
 class InnerProduct(nn.Linear):
 	def __init__(self, param):

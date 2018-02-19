@@ -31,6 +31,14 @@ python -m caffemodel2pytorch VGG_ILSVRC_16_layers.caffemodel
 python -m caffemodel2pytorch VGG_ILSVRC_16_layers.caffemodel -o converted.h5
 ```
 
+```python
+# load dumped VGG16 in PyTorch
+import torch, torchvision, numpy, h5py
+model = torchvision.models.vgg16()
+state_dict = h5py.File('converted.h5', 'r') # torch.load('VGG_ILSVRC_16_layers.caffemodel.pth')
+model.load_state_dict({l : torch.from_numpy(numpy.array(v)).view_as(p) for k, v in state_dict.items() for l, p in model.named_parameters() if k in l})
+```
+
 ## Run Caffe models using PyTorch as backend
 ```python
 import torch

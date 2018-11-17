@@ -287,7 +287,7 @@ modules = dict(
 	Softmax = lambda param: nn.Softmax(dim = param.get('axis', -1)),
 	ReLU = lambda param: nn.ReLU(),
 	Dropout = lambda param: nn.Dropout(p = param['dropout_ratio']),
-	Eltwise = lambda param: [torch.mul, torch.add, torch.max][param['operation']]
+	Eltwise = lambda param: [torch.mul, torch.add, torch.max][param.get('operation', 1)]
 )
 
 class FunctionModule(nn.Module):

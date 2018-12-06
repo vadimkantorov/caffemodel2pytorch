@@ -288,7 +288,7 @@ modules = dict(
 	ReLU = lambda param: nn.ReLU(),
 	Dropout = lambda param: nn.Dropout(p = param['dropout_ratio']),
 	Eltwise = lambda param: [torch.mul, torch.add, torch.max][param.get('operation', 1)],
-        LRN = lambda param: nn.LocalResponseNorm(size=param['local_size'],alpha=param['alpha'],beta=param['beta'])
+	LRN = lambda param: nn.LocalResponseNorm(size = param['local_size'], alpha = param['alpha'], beta = param['beta'])
 )
 
 class FunctionModule(nn.Module):

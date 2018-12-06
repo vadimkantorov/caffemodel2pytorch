@@ -15,6 +15,7 @@ The layer support isn't as complete as in https://github.com/marvis/pytorch-caff
 * dropout (dropout_ratio)
 * eltwise (prod, sum, max)
 * softmax (axis)
+* local response norm (local_size, alpha, beta)
 
 Dependencies: protobuf with Python bindings, including `protoc` binary in `PATH`.
 

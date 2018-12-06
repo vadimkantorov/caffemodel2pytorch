@@ -287,7 +287,8 @@ modules = dict(
 	Softmax = lambda param: nn.Softmax(dim = param.get('axis', -1)),
 	ReLU = lambda param: nn.ReLU(),
 	Dropout = lambda param: nn.Dropout(p = param['dropout_ratio']),
-	Eltwise = lambda param: [torch.mul, torch.add, torch.max][param.get('operation', 1)]
+	Eltwise = lambda param: [torch.mul, torch.add, torch.max][param.get('operation', 1)],
+        LRN = lambda param: nn.LocalResponseNorm(size=param['local_size'],alpha=param['alpha'],beta=param['beta'])
 )
 
 class FunctionModule(nn.Module):
@@ -314,7 +315,7 @@ class CaffePythonLayerModule(nn.Module):
 
 class Convolution(nn.Conv2d):
 	def __init__(self, param):
-		super(Convolution, self).__init__(1, param['num_output'], kernel_size = first_or(param, 'kernel_size', 1), stride = first_or(param, 'stride', 1), padding = first_or(param, 'pad', 0), dilation = first_or(param, 'dilation', 1))
+		super(Convolution, self).__init__(first_or(param,'group',1), param['num_output'], kernel_size = first_or(param, 'kernel_size', 1), stride = first_or(param, 'stride', 1), padding = first_or(param, 'pad', 0), dilation = first_or(param, 'dilation', 1), groups = first_or(param, 'group', 1))
 		self.weight, self.bias = nn.Parameter(), nn.Parameter()
 		self.weight_init, self.bias_init = param.get('weight_filler', {}), param.get('bias_filler', {})
 

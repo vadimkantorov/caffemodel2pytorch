@@ -357,9 +357,9 @@ def init_weight_bias(self, weight = None, bias = None, requires_grad = []):
 	for name, requires_grad in zip(['weight', 'bias'], requires_grad):
 		param, init = getattr(self, name), getattr(self, name + '_init')
 		if init.get('type') == 'gaussian':
-			nn.init.normal(param, std = init['std'])
+			nn.init.normal_(param, std = init['std'])
 		elif init.get('type') == 'constant':
-			nn.init.constant(param, val = init['value'])
+			nn.init.constant_(param, val = init['value'])
 		param.requires_grad = requires_grad
 
 def convert_to_gpu_if_enabled(obj):

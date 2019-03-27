@@ -10,10 +10,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from functools import reduce
 
-try:
-	from urllib.request import urlopen
-except:
-	from urllib.request import urlopen
+from urllib.request import urlopen
 
 import google.protobuf.descriptor
 import google.protobuf.descriptor_pool
@@ -32,7 +29,10 @@ def initialize(caffe_proto = 'https://raw.githubusercontent.com/BVLC/caffe/maste
 	if caffe_pb2 is None:
 		local_caffe_proto = os.path.join(codegen_dir, os.path.basename(caffe_proto))
 		with open(local_caffe_proto, 'w') as f:
-			f.write((urlopen if 'http' in caffe_proto else open)(caffe_proto).read())
+			mybytes = urlopen(caffe_proto).read()
+			mystr = mybytes.decode('ascii', 'ignore')
+			f.write(mystr)
+			#f.write((urlopen if 'http' in caffe_proto else open)(caffe_proto).read())
 		subprocess.check_call(['protoc', '--proto_path', os.path.dirname(local_caffe_proto), '--python_out', codegen_dir, local_caffe_proto])
 		sys.path.insert(0, codegen_dir)
 		old_pool = google.protobuf.descriptor._message.default_pool
@@ -381,7 +381,7 @@ if __name__ == '__main__':
 	args.output_path = args.output_path or args.model_caffemodel + '.pth'
 
 	net_param = initialize(args.caffe_proto).NetParameter()
-	net_param.ParseFromString(open(args.model_caffemodel).read())
+	net_param.ParseFromString(open(args.model_caffemodel, 'rb').read())
 	blobs = {layer.name + '.' + name : dict(data = blob.data, shape = list(blob.shape.dim) if len(blob.shape.dim) > 0 else [blob.num, blob.channels, blob.height, blob.width]) for layer in list(net_param.layer) + list(net_param.layers) for name, blob in zip(['weight', 'bias'], layer.blobs)}
 
 	if args.output_path.endswith('.json'):

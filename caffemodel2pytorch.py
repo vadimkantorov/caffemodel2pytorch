@@ -10,7 +10,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 from functools import reduce
 
-from urllib.request import urlopen
+try:
+	from urllib.request import urlopen
+except:
+	from urllib2 import urlopen # Python 2 support.
 
 import google.protobuf.descriptor
 import google.protobuf.descriptor_pool
@@ -72,7 +75,7 @@ class Net(nn.Module):
 			layer_type = layer.type if layer.type != 'Python' else layer.python_param.layer
 			if isinstance(layer_type, int):
 				layer_type = layer.LayerType.Name(layer_type)
-			module_constructor = ([v for k, v in list(modules.items()) if k.replace('_', '').upper() in [layer_type.replace('_', '').upper(), layer.name.replace('_', '').upper()]] + [None])[0]
+			module_constructor = ([v for k, v in modules.items() if k.replace('_', '').upper() in [layer_type.replace('_', '').upper(), layer.name.replace('_', '').upper()]] + [None])[0]
 			if module_constructor is not None:
 				param = to_dict(([v for f, v in layer.ListFields() if f.name.endswith('_param')] + [None])[0])
 				caffe_input_variable_names = list(layer.bottom)
@@ -94,7 +97,7 @@ class Net(nn.Module):
 				for optim_param, p in zip(caffe_optimization_params, module.parameters()):
 					p.requires_grad = optim_param.get('lr_mult', 1) != 0
 			else:
-				print(('Skipping layer [{}, {}, {}]: not found in caffemodel2pytorch.modules dict'.format(layer.name, layer_type, layer.type)))
+				print('Skipping layer [{}, {}, {}]: not found in caffemodel2pytorch.modules dict'.format(layer.name, layer_type, layer.type))
 
 		if weights is not None:
 			self.copy_from(weights)
@@ -108,8 +111,8 @@ class Net(nn.Module):
 	def forward(self, data = None, **variables):
 		if data is not None:
 			variables['data'] = data
-		numpy = not all(isinstance(v, torch.autograd.Variable) for v in list(variables.values()))
-		variables = {k : convert_to_gpu_if_enabled(torch.autograd.Variable(torch.from_numpy(v.copy())) if numpy else v) for k, v in list(variables.items())}
+		numpy = not all(map(torch.is_tensor, variables.values()))
+		variables = {k : convert_to_gpu_if_enabled(torch.from_numpy(v.copy()) if numpy else v) for k, v in variables.items()}
 
 		for module in [module for module in self.children() if not all(name in variables for name in module.caffe_output_variable_names)]:
 			for name in module.caffe_input_variable_names:
@@ -118,26 +121,26 @@ class Net(nn.Module):
 			outputs = module(*inputs)
 			if not isinstance(outputs, tuple):
 				outputs = (outputs, )
-			variables.update(dict(list(zip(module.caffe_output_variable_names, outputs))))
+			variables.update(dict(zip(module.caffe_output_variable_names, outputs)))
 
-		self.blobs.update({k : Blob(data = v, numpy = numpy) for k, v in list(variables.items())})
+		self.blobs.update({k : Blob(data = v, numpy = numpy) for k, v in variables.items()})
 		caffe_output_variable_names = set([name for module in self.children() for name in module.caffe_output_variable_names]) - set([name for module in self.children() for name in module.caffe_input_variable_names if name not in module.caffe_output_variable_names])
-		return {k : v.detach().cpu().numpy() if numpy else v for k, v in list(variables.items()) if k in caffe_output_variable_names}
+		return {k : v.detach().cpu().numpy() if numpy else v for k, v in variables.items() if k in caffe_output_variable_names}
 
 	def copy_from(self, weights):
 		try:
 			import h5py, numpy
 			state_dict = self.state_dict()
-			for k, v in list(h5py.File(weights, 'r').items()):
+			for k, v in h5py.File(weights, 'r').items():
 				if k in state_dict:
 					state_dict[k].resize_(v.shape).copy_(torch.from_numpy(numpy.array(v)))
-			print(('caffemodel2pytorch: loaded model from [{}] in HDF5 format'.format(weights)))
+			print('caffemodel2pytorch: loaded model from [{}] in HDF5 format'.format(weights))
 		except Exception as e:
-			print(('caffemodel2pytorch: loading model from [{}] in HDF5 format failed [{}], falling back to caffemodel format'.format(weights, e.message)))
+			print('caffemodel2pytorch: loading model from [{}] in HDF5 format failed [{}], falling back to caffemodel format'.format(weights, e.message))
 			bytes_weights = open(weights).read()
 			bytes_parsed = self.net_param.ParseFromString(bytes_weights)
 			if bytes_parsed != len(bytes_weights):
-				print(('caffemodel2pytorch: loading model from [{}] in caffemodel format, WARNING: file length [{}] is not equal to number of parsed bytes [{}]'.format(weights, len(bytes_weights), bytes_parsed)))
+				print('caffemodel2pytorch: loading model from [{}] in caffemodel format, WARNING: file length [{}] is not equal to number of parsed bytes [{}]'.format(weights, len(bytes_weights), bytes_parsed))
 			for layer in list(self.net_param.layer) + list(self.net_param.layers):
 				module = getattr(self, layer.name, None)
 				if module is None:
@@ -145,14 +148,14 @@ class Net(nn.Module):
 				parameters = {name : convert_to_gpu_if_enabled(torch.FloatTensor(blob.data)).view(list(blob.shape.dim) if len(blob.shape.dim) > 0 else [blob.num, blob.channels, blob.height, blob.width]) for name, blob in zip(['weight', 'bias'], layer.blobs)}
 				if len(parameters) > 0:
 					module.set_parameters(**parameters)
-			print(('caffemodel2pytorch: loaded model from [{}] in caffemodel format'.format(weights)))
+			print('caffemodel2pytorch: loaded model from [{}] in caffemodel format'.format(weights))
 
 	def save(self, weights):
 		import h5py
 		with h5py.File(weights, 'w') as h:
-			for k, v in list(self.state_dict().items()):
+			for k, v in self.state_dict().items():
 				h[k] = v.cpu().numpy()
-		print(('caffemodel2pytorch: saved model to [{}] in HDF5 format'.format(weights)))
+		print('caffemodel2pytorch: saved model to [{}] in HDF5 format'.format(weights))
 
 	@property
 	def layers(self):
@@ -258,7 +261,7 @@ class SGDSolver(object):
 			loss_batch = 0
 			losses_batch = collections.defaultdict(float)
 			for j in range(self.iter_size):
-				outputs = [kv for kv in list(self.net(**inputs).items()) if self.net.blob_loss_weights[kv[0]] != 0]
+				outputs = [kv for kv in self.net(**inputs).items() if self.net.blob_loss_weights[kv[0]] != 0]
 				loss = sum([self.net.blob_loss_weights[k] * v.sum() for k, v in outputs])
 				loss_batch += float(loss) / self.iter_size
 				for k, v in outputs:
@@ -274,10 +277,10 @@ class SGDSolver(object):
 			self.iter += 1
 
 			log_prefix = self.__module__ + '.' + type(self).__name__ 
-			print(('{}] Iteration {}, loss: {}'.format(log_prefix, self.iter, loss_batch)))
+			print('{}] Iteration {}, loss: {}'.format(log_prefix, self.iter, loss_batch))
 			for i, (name, loss) in enumerate(sorted(losses_batch.items())):
-				print(('{}]     Train net output #{}: {} = {} (* {} = {} loss)'.format(log_prefix, i, name, loss, self.net.blob_loss_weights[name], self.net.blob_loss_weights[name] * loss)))
-			print(('{}] Iteration {}, lr = {}, time = {}'.format(log_prefix, self.iter, self.optimizer_params['lr'], time.time() - tic)))
+				print('{}]     Train net output #{}: {} = {} (* {} = {} loss)'.format(log_prefix, i, name, loss, self.net.blob_loss_weights[name], self.net.blob_loss_weights[name] * loss))
+			print('{}] Iteration {}, lr = {}, time = {}'.format(log_prefix, self.iter, self.optimizer_params['lr'], time.time() - tic))
 				
 		return loss_total
 
@@ -391,9 +394,9 @@ if __name__ == '__main__':
 	elif args.output_path.endswith('.h5'):
 		import h5py, numpy
 		with h5py.File(args.output_path, 'w') as h:
-			h.update(**{k : numpy.array(blob['data'], dtype = numpy.float32).reshape(*blob['shape']) for k, blob in list(blobs.items())})
+			h.update(**{k : numpy.array(blob['data'], dtype = numpy.float32).reshape(*blob['shape']) for k, blob in blobs.items()})
 	elif args.output_path.endswith('.npy') or args.output_path.endswith('.npz'):
 		import numpy
-		(numpy.savez if args.output_path[-1] == 'z' else numpy.save)(args.output_path, **{k : numpy.array(blob['data'], dtype = numpy.float32).reshape(*blob['shape']) for k, blob in list(blobs.items())})
+		(numpy.savez if args.output_path[-1] == 'z' else numpy.save)(args.output_path, **{k : numpy.array(blob['data'], dtype = numpy.float32).reshape(*blob['shape']) for k, blob in blobs.items()})
 	elif args.output_path.endswith('.pth'):
-		torch.save({k : torch.FloatTensor(blob['data']).view(*blob['shape']) for k, blob in list(blobs.items())}, args.output_path)
+		torch.save({k : torch.FloatTensor(blob['data']).view(*blob['shape']) for k, blob in blobs.items()}, args.output_path)

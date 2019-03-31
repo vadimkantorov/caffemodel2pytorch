@@ -8,11 +8,12 @@ import collections
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from functools import reduce
 
 try:
-	from urllib2 import urlopen
-except:
 	from urllib.request import urlopen
+except:
+	from urllib2 import urlopen # Python 2 support.
 
 import google.protobuf.descriptor
 import google.protobuf.descriptor_pool
@@ -31,7 +32,10 @@ def initialize(caffe_proto = 'https://raw.githubusercontent.com/BVLC/caffe/maste
 	if caffe_pb2 is None:
 		local_caffe_proto = os.path.join(codegen_dir, os.path.basename(caffe_proto))
 		with open(local_caffe_proto, 'w') as f:
-			f.write((urlopen if 'http' in caffe_proto else open)(caffe_proto).read())
+			mybytes = urlopen(caffe_proto).read()
+			mystr = mybytes.decode('ascii', 'ignore')
+			f.write(mystr)
+			#f.write((urlopen if 'http' in caffe_proto else open)(caffe_proto).read())
 		subprocess.check_call(['protoc', '--proto_path', os.path.dirname(local_caffe_proto), '--python_out', codegen_dir, local_caffe_proto])
 		sys.path.insert(0, codegen_dir)
 		old_pool = google.protobuf.descriptor._message.default_pool
@@ -107,8 +111,8 @@ class Net(nn.Module):
 	def forward(self, data = None, **variables):
 		if data is not None:
 			variables['data'] = data
-		numpy = not all(isinstance(v, torch.autograd.Variable) for v in variables.values())
-		variables = {k : convert_to_gpu_if_enabled(torch.autograd.Variable(torch.from_numpy(v.copy())) if numpy else v) for k, v in variables.items()}
+		numpy = not all(map(torch.is_tensor, variables.values()))
+		variables = {k : convert_to_gpu_if_enabled(torch.from_numpy(v.copy()) if numpy else v) for k, v in variables.items()}
 
 		for module in [module for module in self.children() if not all(name in variables for name in module.caffe_output_variable_names)]:
 			for name in module.caffe_input_variable_names:
@@ -131,7 +135,7 @@ class Net(nn.Module):
 				if k in state_dict:
 					state_dict[k].resize_(v.shape).copy_(torch.from_numpy(numpy.array(v)))
 			print('caffemodel2pytorch: loaded model from [{}] in HDF5 format'.format(weights))
-		except Exception, e:
+		except Exception as e:
 			print('caffemodel2pytorch: loading model from [{}] in HDF5 format failed [{}], falling back to caffemodel format'.format(weights, e.message))
 			bytes_weights = open(weights).read()
 			bytes_parsed = self.net_param.ParseFromString(bytes_weights)
@@ -257,7 +261,7 @@ class SGDSolver(object):
 			loss_batch = 0
 			losses_batch = collections.defaultdict(float)
 			for j in range(self.iter_size):
-				outputs = filter(lambda kv: self.net.blob_loss_weights[kv[0]] != 0, self.net(**inputs).items())
+				outputs = [kv for kv in self.net(**inputs).items() if self.net.blob_loss_weights[kv[0]] != 0]
 				loss = sum([self.net.blob_loss_weights[k] * v.sum() for k, v in outputs])
 				loss_batch += float(loss) / self.iter_size
 				for k, v in outputs:
@@ -369,7 +373,7 @@ def first_or(param, key, default):
 	return param[key] if isinstance(param.get(key), int) else (param.get(key, []) + [default])[0]
 		
 def to_dict(obj):
-	return list(map(to_dict, obj)) if isinstance(obj, collections.Iterable) else {} if obj is None else {f.name : converter(v) if f.label != FD.LABEL_REPEATED else list(map(converter, v)) for f, v in obj.ListFields() for converter in [{FD.TYPE_DOUBLE: float, FD.TYPE_SFIXED32: float, FD.TYPE_SFIXED64: float, FD.TYPE_SINT32: int, FD.TYPE_SINT64: long, FD.TYPE_FLOAT: float, FD.TYPE_ENUM: int, FD.TYPE_UINT32: int, FD.TYPE_INT64: long, FD.TYPE_UINT64: long, FD.TYPE_INT32: int, FD.TYPE_FIXED64: float, FD.TYPE_FIXED32: float, FD.TYPE_BOOL: bool, FD.TYPE_STRING: unicode, FD.TYPE_BYTES: lambda x: x.encode('string_escape'), FD.TYPE_MESSAGE: to_dict}[f.type]]}
+	return list(map(to_dict, obj)) if isinstance(obj, collections.Iterable) else {} if obj is None else {f.name : converter(v) if f.label != FD.LABEL_REPEATED else list(map(converter, v)) for f, v in obj.ListFields() for converter in [{FD.TYPE_DOUBLE: float, FD.TYPE_SFIXED32: float, FD.TYPE_SFIXED64: float, FD.TYPE_SINT32: int, FD.TYPE_SINT64: int, FD.TYPE_FLOAT: float, FD.TYPE_ENUM: int, FD.TYPE_UINT32: int, FD.TYPE_INT64: int, FD.TYPE_UINT64: int, FD.TYPE_INT32: int, FD.TYPE_FIXED64: float, FD.TYPE_FIXED32: float, FD.TYPE_BOOL: bool, FD.TYPE_STRING: str, FD.TYPE_BYTES: lambda x: x.encode('string_escape'), FD.TYPE_MESSAGE: to_dict}[f.type]]}
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
@@ -380,7 +384,7 @@ if __name__ == '__main__':
 	args.output_path = args.output_path or args.model_caffemodel + '.pth'
 
 	net_param = initialize(args.caffe_proto).NetParameter()
-	net_param.ParseFromString(open(args.model_caffemodel).read())
+	net_param.ParseFromString(open(args.model_caffemodel, 'rb').read())
 	blobs = {layer.name + '.' + name : dict(data = blob.data, shape = list(blob.shape.dim) if len(blob.shape.dim) > 0 else [blob.num, blob.channels, blob.height, blob.width]) for layer in list(net_param.layer) + list(net_param.layers) for name, blob in zip(['weight', 'bias'], layer.blobs)}
 
 	if args.output_path.endswith('.json'):

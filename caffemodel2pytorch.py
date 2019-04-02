@@ -378,10 +378,10 @@ def to_dict(obj):
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
 	parser.add_argument(metavar = 'model.caffemodel', dest = 'model_caffemodel', help = 'Path to model.caffemodel')
-	parser.add_argument('-o', dest = 'output_path', help = 'Path to converted model, supported file extensions are: h5, npy, npz, json, pth')
+	parser.add_argument('-o', dest = 'output_path', help = 'Path to converted model, supported file extensions are: h5, npy, npz, json, pt')
 	parser.add_argument('--caffe.proto', metavar = '--caffe.proto', dest = 'caffe_proto', help = 'Path to caffe.proto (typically located at CAFFE_ROOT/src/caffe/proto/caffe.proto)', default = 'https://raw.githubusercontent.com/BVLC/caffe/master/src/caffe/proto/caffe.proto')
 	args = parser.parse_args()
-	args.output_path = args.output_path or args.model_caffemodel + '.pth'
+	args.output_path = args.output_path or args.model_caffemodel + '.pt'
 
 	net_param = initialize(args.caffe_proto).NetParameter()
 	net_param.ParseFromString(open(args.model_caffemodel, 'rb').read())
@@ -398,5 +398,5 @@ if __name__ == '__main__':
 	elif args.output_path.endswith('.npy') or args.output_path.endswith('.npz'):
 		import numpy
 		(numpy.savez if args.output_path[-1] == 'z' else numpy.save)(args.output_path, **{k : numpy.array(blob['data'], dtype = numpy.float32).reshape(*blob['shape']) for k, blob in blobs.items()})
-	elif args.output_path.endswith('.pth'):
+	elif args.output_path.endswith('.pt'):
 		torch.save({k : torch.FloatTensor(blob['data']).view(*blob['shape']) for k, blob in blobs.items()}, args.output_path)

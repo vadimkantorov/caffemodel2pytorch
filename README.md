@@ -59,7 +59,7 @@ model.eval()
 torch.set_grad_enabled(False)
 
 # make sure to have right procedure of image normalization and channel reordering
-image = torch.autograd.Variable(torch.Tensor(8, 3, 224, 224).cuda())
+image = torch.Tensor(8, 3, 224, 224).cuda()
 
 # outputs dict of PyTorch Variables
 # in this example the dict contains the only key "prob"

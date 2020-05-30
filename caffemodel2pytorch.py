@@ -136,8 +136,8 @@ class Net(nn.Module):
 					state_dict[k].resize_(v.shape).copy_(torch.from_numpy(numpy.array(v)))
 			print('caffemodel2pytorch: loaded model from [{}] in HDF5 format'.format(weights))
 		except Exception as e:
-			print('caffemodel2pytorch: loading model from [{}] in HDF5 format failed [{}], falling back to caffemodel format'.format(weights, e.message))
-			bytes_weights = open(weights).read()
+			print('caffemodel2pytorch: loading model from [{}] in HDF5 format failed [{}], falling back to caffemodel format'.format(weights, e))
+			bytes_weights = open(weights, 'rb').read()
 			bytes_parsed = self.net_param.ParseFromString(bytes_weights)
 			if bytes_parsed != len(bytes_weights):
 				print('caffemodel2pytorch: loading model from [{}] in caffemodel format, WARNING: file length [{}] is not equal to number of parsed bytes [{}]'.format(weights, len(bytes_weights), bytes_parsed))

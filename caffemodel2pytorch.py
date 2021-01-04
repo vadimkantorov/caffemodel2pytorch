@@ -178,13 +178,13 @@ class Blob(object):
 
 	@property
 	def data(self):
-		if self.numpy and isinstance(self.data_, torch.autograd.Variable):
+		if self.numpy and torch.is_tensor(self.data_):
 			self.data_ = self.data_.detach().cpu().numpy()
 		return self.data_
 
 	@property
 	def diff(self):
-		if self.numpy and isinstance(self.diff_, torch.autograd.Variable):
+		if self.numpy and torch.is_tensor(self.diff_):
 			self.diff_ = self.diff_.detach().cpu().numpy()
 		return self.diff_
 

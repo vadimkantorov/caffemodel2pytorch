@@ -38,12 +38,9 @@ def initialize(caffe_proto = 'https://raw.githubusercontent.com/BVLC/caffe/maste
 			#f.write((urlopen if 'http' in caffe_proto else open)(caffe_proto).read())
 		subprocess.check_call(['protoc', '--proto_path', os.path.dirname(local_caffe_proto), '--python_out', codegen_dir, local_caffe_proto])
 		sys.path.insert(0, codegen_dir)
-		old_pool = google.protobuf.descriptor._message.default_pool
 		old_symdb = google.protobuf.symbol_database._DEFAULT
-		google.protobuf.descriptor._message.default_pool = google.protobuf.descriptor_pool.DescriptorPool()
-		google.protobuf.symbol_database._DEFAULT = google.protobuf.symbol_database.SymbolDatabase(pool = google.protobuf.descriptor._message.default_pool)
+		google.protobuf.symbol_database._DEFAULT = google.protobuf.symbol_database.SymbolDatabase(pool = google.protobuf.descriptor_pool.DescriptorPool())
 		import caffe_pb2 as caffe_pb2
-		google.protobuf.descriptor._message.default_pool = old_pool
 		google.protobuf.symbol_database._DEFAULT = old_symdb
 		sys.modules[__name__ + '.proto'] = sys.modules[__name__]
 		if shadow_caffe:

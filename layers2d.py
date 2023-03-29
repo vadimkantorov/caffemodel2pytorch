@@ -219,7 +219,7 @@ class Deconvolution(nn.ConvTranspose2d):
         )
 
     def forward(self, x):
-        if self.weight_numel() == 0 and self.bias_numel() == 0:
+        if self.weight.numel() == 0 and self.bias.numel() == 0:
             requires_grad = [self.weight.requires_grad, self.bias.requires_grad]
             super(Deconvolution, self).__init__(
                 x.size(1),
@@ -267,6 +267,11 @@ class InnerProduct(nn.Linear):
             bias=bias.view(-1) if bias is not None else None,
         )
         self.in_features = self.weight.size(1)
+
+
+class Concat:
+    def __call__(self, *args):
+        return torch.cat(tuple([*args]), dim=1)
 
 
 # using dict calls (=) otherwise the dict does not play nice with

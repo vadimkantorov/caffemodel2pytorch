@@ -20,6 +20,7 @@ import google.protobuf.json_format
 import ssl
 
 from layers2d import modules2d
+from layers3d import modules3d
 from blob import Blob
 from utils import to_dict, convert_to_gpu_if_enabled
 
@@ -108,9 +109,13 @@ class Net(nn.Module):
                 "Only 2D and 3D caffe networks are currently supported."
             )
 
-        dimensions = 2
-        if dimensions == 2:
+        # Decide to use 2D or 3D modules
+        if input_dimensions == 2:
+            print("2D modules selected")
             modules = modules2d
+        if input_dimensions == 3:
+            print("3D modules selected")
+            modules = modules3d
 
         for layer in list(self.net_param.layer) + list(self.net_param.layers):
             layer_type = (

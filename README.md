@@ -16,11 +16,19 @@ The layer support isn't as complete as in https://github.com/marvis/pytorch-caff
 * softmax (axis)
 * local response norm (local_size, alpha, beta)
 
-Dependencies: protobuf with Python bindings, including `protoc` binary in `PATH`.
 
 PRs to enable other layers or layer params are very welcome (see the definition of the `modules` dictionary in the code)!
 
 License is MIT.
+
+## Installation Instruction
+### Python Environment
+This converter is currently working on python3.8 in Ubuntu. To install, create a virtual environment using ```python3 -m vev .venv```. Activate the environment using ```source .venv\bin\activate```. Lastly install the requirements using ```pip install -f requirements.txt```.
+
+### Protobuf Compiler
+Dependencies: protobuf with Python bindings, including `protoc` binary in `PATH`.
+
+To install protobuf in ubuntu run: ```sudo apt install protobuf-compiler```.
 
 ## Dump weights to PT or HDF5
 ```shell

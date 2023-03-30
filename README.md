@@ -23,7 +23,7 @@ License is MIT.
 
 ## Installation Instruction
 ### Python Environment
-This converter is currently working on python3.8 in Ubuntu. To install, create a virtual environment using ```python3 -m vev .venv```. Activate the environment using ```source .venv\bin\activate```. Lastly install the requirements using ```pip install -f requirements.txt```.
+This converter is currently working on python3.8 in Ubuntu. To install, create a virtual environment using ```python3 -m vev .venv```. Activate the environment using ```source .venv/bin/activate```. Lastly install the requirements using ```pip install -r requirements.txt```.
 
 ### Protobuf Compiler
 Dependencies: protobuf with Python bindings, including `protoc` binary in `PATH`.
